@@ -1,0 +1,19 @@
+[package]
+name = "dimmer-gui-tests"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "End-to-end GUI tests for Dimmer using WayDriver (headless Wayland + AT-SPI)"
+
+# Standalone workspace: these tests need WayDriver's GStreamer development
+# packages, so they must not become part of the main `cargo test` gate.
+[workspace]
+
+[dependencies]
+anyhow = "1.0"
+tempfile = "3"
+tokio = { version = "1", features = ["full"] }
+waydriver = "0.3.10"
+waydriver-capture-mutter = "0.3.10"
+waydriver-compositor-mutter = "0.3.10"
+waydriver-input-mutter = "0.3.10"
