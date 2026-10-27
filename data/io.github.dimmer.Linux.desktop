@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Dimmer
+GenericName=Display Dimmer
+Comment=Dim every display independently
+Exec=dimmer
+TryExec=dimmer
+Icon=io.github.dimmer.Linux
+Terminal=false
+Categories=Utility;
+Keywords=dimmer;dim;brightness;screen;display;monitor;
+StartupNotify=true
+StartupWMClass=io.github.dimmer.Linux

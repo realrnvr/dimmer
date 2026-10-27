@@ -1,0 +1,66 @@
+/*
+ * Dimmer visual theme.
+ *
+ * Kept deliberately small: libadwaita supplies the palette and most widget
+ * styling.  These rules only give the dimmer cards, tint swatch and header a
+ * distinct, calm identity that works in both light and dark themes.
+ */
+
+.dimmer-window {
+  background-color: @window_bg_color;
+}
+
+.dimmer-header {
+  background-color: alpha(@headerbar_bg_color, 0.92);
+  border-bottom: 1px solid alpha(@borders, 0.6);
+}
+
+.dimmer-card {
+  padding: 16px;
+  border-radius: 14px;
+  background-color: alpha(@card_bg_color, 0.94);
+  border: 1px solid alpha(@borders, 0.55);
+  box-shadow: 0 1px 2px alpha(black, 0.08);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.dimmer-card:hover {
+  border-color: alpha(@accent_bg_color, 0.45);
+  box-shadow: 0 2px 8px alpha(black, 0.12);
+}
+
+.dimmer-master {
+  background-image: linear-gradient(
+    155deg,
+    alpha(@accent_bg_color, 0.16),
+    alpha(@accent_bg_color, 0.04)
+  );
+  border-color: alpha(@accent_bg_color, 0.4);
+}
+
+.dimmer-master:hover {
+  border-color: alpha(@accent_bg_color, 0.7);
+}
+
+.dimmer-tint {
+  min-width: 26px;
+  min-height: 26px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid alpha(@borders, 0.8);
+}
+
+
+
+.dimmer-about-icon {
+  color: @accent_color;
+}
+
+.dimmer-card scale trough {
+  min-width: 10px;
+  border-radius: 999px;
+}
+
+.dimmer-card scale highlight {
+  border-radius: 999px;
+}

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.dimmer.Linux</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <name>Dimmer</name>
+  <summary>Dim every display independently</summary>
+
+  <developer id="io.github.dimmer">
+    <name>Dimmer for Linux contributors</name>
+  </developer>
+
+  <description>
+    <p>
+      Dimmer lowers the brightness of individual monitors without changing the
+      hardware backlight. A master control drives every configured screen, and
+      each screen can also be adjusted or switched off on its own.
+    </p>
+    <p>
+      Optional screen identity numbers and boundaries make it easy to tell
+      monitors apart. The tint colour is mixed into the dimming overlay for a
+      warmer result, and the settings window can be excluded so it stays fully
+      readable while everything behind it is dimmed.
+    </p>
+    <p>
+      The application also provides a top-bar indicator for opening and quitting,
+      can start hidden, and supports autostart in native installations. On GNOME
+      Wayland a small GNOME Shell extension renders the click-through overlay; the
+      Rust application owns all settings and behaviour.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">io.github.dimmer.Linux.desktop</launchable>
+
+  <url type="homepage">https://github.com/realrnvr/dimmer</url>
+  <url type="bugtracker">https://github.com/realrnvr/dimmer/issues</url>
+  <url type="vcs-browser">https://github.com/realrnvr/dimmer</url>
+
+  <provides>
+    <binary>dimmer</binary>
+  </provides>
+
+  <categories>
+    <category>Utility</category>
+    <category>Settings</category>
+  </categories>
+  <keywords>
+    <keyword>dimmer</keyword>
+    <keyword>brightness</keyword>
+    <keyword>display</keyword>
+    <keyword>monitor</keyword>
+    <keyword>screen</keyword>
+  </keywords>
+
+  <content_rating type="oars-1.1"/>
+
+  <releases>
+    <release version="1.0.0" date="2026-10-26">
+      <description>
+        <p>First Linux release: per-monitor dimming, master control, screen IDs,
+        boundaries, tint, non-dimmable settings window, tray indicator, autostart
+        and GNOME Shell integration.</p>
+      </description>
+    </release>
+  </releases>
+
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+</component>

@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/dimmer-core"]
+members = ["crates/dimmer-core", "crates/dimmer"]
 resolver = "2"
 
 [workspace.package]
