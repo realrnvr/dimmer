@@ -220,8 +220,9 @@ directories.
 
 ## 8. References
 
-- Original behaviour: `Dimmer-src/` (WPF, v2.0.1), screenshots and readme from
-  nelsonpires.com.
+- Original behaviour reference: Dimmer 2.0.1 by Nelson Pires, documented at
+  https://www.nelsonpires.com/software/dimmer. This repository does not contain
+  the original application's source or assets.
 - Soft Brightness GNOME extension (overlay via `St.Widget`, opacity):
   https://github.com/F-i-f/soft-brightness
 - OLED Dimmer (GNOME overlay effect):
