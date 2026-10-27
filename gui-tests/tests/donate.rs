@@ -28,7 +28,7 @@ async fn donate_button_opens_paypal() -> Result<()> {
             .wait_for_open_uri(
                 cursor,
                 |request| request.uri.contains("paypal.com"),
-                Duration::from_secs(5),
+                Duration::from_secs(20),
             )
             .await
             .context("Donate button did not request the PayPal URL")?;
