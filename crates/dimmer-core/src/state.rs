@@ -52,6 +52,7 @@ pub struct OverlayState {
     pub window_visible: bool,
     pub window_app_id: String,
     pub window_wm_class: String,
+    pub window_reset_serial: u64,
     pub show_ids: bool,
     pub show_boundaries: bool,
     pub non_dimmable_window: bool,
@@ -67,6 +68,7 @@ pub struct StateContext {
     pub window_visible: bool,
     pub window_app_id: String,
     pub window_wm_class: String,
+    pub window_reset_serial: u64,
 }
 
 impl Default for StateContext {
@@ -77,6 +79,7 @@ impl Default for StateContext {
             window_visible: false,
             window_app_id: "io.github.dimmer.Linux".to_owned(),
             window_wm_class: "dimmer".to_owned(),
+            window_reset_serial: 0,
         }
     }
 }
@@ -112,6 +115,7 @@ pub fn build_state(
         window_visible: context.window_visible,
         window_app_id: context.window_app_id.clone(),
         window_wm_class: context.window_wm_class.clone(),
+        window_reset_serial: context.window_reset_serial,
         show_ids: settings.show_ids,
         show_boundaries: settings.show_boundaries,
         non_dimmable_window: settings.non_dimmable_window,

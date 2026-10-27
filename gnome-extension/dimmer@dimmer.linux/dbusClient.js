@@ -91,6 +91,11 @@ export const DimmerDbusClient = GObject.registerClass({
         this._call('ResetWindowPosition');
     }
 
+    windowResetCompleted(serial, success) {
+        this._call('WindowResetCompleted',
+            new GLib.Variant('(sb)', [String(serial), Boolean(success)]));
+    }
+
     quit() {
         this._call('Quit');
     }

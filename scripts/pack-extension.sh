@@ -17,6 +17,7 @@ EXPECTED=(
     overlayManager.js
     overlayMath.js
     stylesheet.css
+    windowReset.js
 )
 
 if ! command -v gnome-extensions >/dev/null 2>&1; then
@@ -34,6 +35,7 @@ gnome-extensions pack --force --out-dir "$OUT" \
     --extra-source=indicator.js \
     --extra-source=overlayManager.js \
     --extra-source=overlayMath.js \
+    --extra-source=windowReset.js \
     "$SOURCE"
 
 BUNDLE=$OUT/dimmer@dimmer.linux.shell-extension.zip

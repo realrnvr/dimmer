@@ -17,12 +17,12 @@ Therefore the project is split into:
 | Component | Language | Responsibility |
 |---|---|---|
 | `dimmer` | Rust + GTK4/libadwaita | UI, state, validation, persistence, diagnostics, D-Bus service |
-| `dimmer@dimmer.linux` | GJS (GNOME Shell) | Draw click-through overlays, IDs, boundaries; top-bar indicator |
+| `dimmer@dimmer.linux` | GJS (GNOME Shell) | Draw overlays, IDs, boundaries; reset the app window; top-bar indicator |
 | `dimmer-core` | Rust | Pure settings/model/math logic (unit-testable, no GTK) |
 
-The Rust app is still the application. The extension contains no settings logic and
-renders exactly what the Rust service publishes. This mirrors the proven
-SpotlightDimmer GNOME adapter design (MIT).
+The Rust app remains the source of truth for settings and reset requests. The
+extension applies GNOME-specific window placement and renders the published
+overlay state. This mirrors the proven SpotlightDimmer GNOME adapter design (MIT).
 
 ## 2. Process / component diagram
 
@@ -67,20 +67,22 @@ SpotlightDimmer GNOME adapter design (MIT).
 | `RegisterExtension` | `(s extension_version) → s` | Extension announces itself; returns state JSON. Sets `extension_connected=true` |
 | `ShowWindow` | `() → ()` | Show + present the settings window |
 | `HideWindow` | `() → ()` | Hide the settings window |
-| `ResetWindowPosition` | `() → ()` | Present the window at the default size and reset stored position |
+| `ResetWindowPosition` | `() → ()` | Restore the default size and center the window on the primary monitor |
+| `WindowResetCompleted` | `(s serial, b success) → ()` | GNOME Shell reports the confirmed reset result to the app |
 | `SetMaster` | `(b on, d dim) → ()` | Update master quickly (indicator menu) |
 | `SetScreen` | `(i id, b on, d dim) → ()` | Update one screen quickly |
 | `ExtensionDisconnected` | `() → ()` | Extension disabling itself; clears `extension_connected` without hiding overlays logically |
 | `Quit` | `() → ()` | Save and quit the application |
 
-Methods that change state update the Rust model, persist it, update the UI, and
-emit `StateChanged`.
+Methods that change settings update the Rust model, persist it, update the UI, and
+emit `StateChanged`. Window reset completion is reported separately so the UI can
+show its final success or failure toast.
 
 ### Signals
 
 | Signal | Signature | Description |
 |---|---|---|
-| `StateChanged` | `(s state_json)` | Emitted on any overlay-relevant change |
+| `StateChanged` | `(s state_json)` | Emitted on overlay changes; `window_reset_serial` increments when the extension should reset the app window |
 | `VisibilityChanged` | `(b visible)` | Main window shown/hidden; lets the extension update the hole |
 
 ### State JSON
@@ -93,6 +95,7 @@ emit `StateChanged`.
   "window_visible": true,
   "window_app_id": "io.github.dimmer.Linux",
   "window_wm_class": "dimmer",
+  "window_reset_serial": 0,
   "show_ids": false,
   "show_boundaries": false,
   "non_dimmable_window": true,

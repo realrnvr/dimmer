@@ -33,6 +33,7 @@ pub struct Ui {
     debouncer: Rc<SaveDebouncer>,
     quitting: Rc<Cell<bool>>,
     movable: Rc<Cell<bool>>,
+    pending_window_reset: Rc<Cell<Option<u64>>>,
     toast: Rc<dyn Fn(&str)>,
 }
 
@@ -64,18 +65,9 @@ impl Ui {
         let movable = Rc::new(Cell::new(true));
         let quitting = Rc::new(Cell::new(false));
 
-        let weak_window = window.downgrade();
         let shared_for_reset = Arc::clone(&shared);
-        let toast_for_reset = Rc::clone(&toast);
         let reset_window: Rc<dyn Fn()> = Rc::new(move || {
-            if let Some(window) = weak_window.upgrade() {
-                shared_for_reset.reset_saved_position();
-                window.unmaximize();
-                window.set_default_size(DEFAULT_WIDTH, DEFAULT_HEIGHT);
-                window.present();
-                let _ = shared_for_reset.save();
-                toast_for_reset("Window presented at the default size");
-            }
+            shared_for_reset.send_ui(UiCommand::ResetWindowPosition);
         });
 
         let screens = ScreensPage::new(Arc::clone(&shared), Rc::clone(&debouncer));
@@ -202,6 +194,7 @@ impl Ui {
             debouncer: Rc::clone(&debouncer),
             quitting: Rc::clone(&quitting),
             movable,
+            pending_window_reset: Rc::new(Cell::new(None)),
             toast,
         });
 
@@ -290,12 +283,31 @@ impl Ui {
 
     /// Brings the window back and resets the saved position hint.
     pub fn reset_position(&self) {
-        self.shared.reset_saved_position();
-        self.window.unmaximize();
-        self.window.set_default_size(DEFAULT_WIDTH, DEFAULT_HEIGHT);
         self.window.present();
+        if !self.shared.snapshot().extension_connected {
+            (self.toast)("Window reset failed: GNOME Shell extension is not connected");
+            return;
+        }
+
+        let serial = self.shared.request_window_reset();
         let _ = self.shared.save();
-        (self.toast)("Window presented at the default size");
+        self.pending_window_reset.set(Some(serial));
+
+        let pending = Rc::clone(&self.pending_window_reset);
+        let toast = Rc::clone(&self.toast);
+        glib::timeout_add_local_once(Duration::from_secs(3), move || {
+            if pending.get() == Some(serial) {
+                pending.set(None);
+                toast("Window reset failed: GNOME Shell did not confirm the new position");
+            }
+        });
+    }
+
+    fn complete_window_reset(&self, serial: u64, success: bool) {
+        if let Some(message) = take_window_reset_result(&self.pending_window_reset, serial, success)
+        {
+            (self.toast)(message);
+        }
     }
 
     /// Refreshes all pages from shared state.
@@ -356,6 +368,9 @@ impl Ui {
                     UiCommand::ShowWindow => ui.present(None),
                     UiCommand::HideWindow => ui.hide(),
                     UiCommand::ResetWindowPosition => ui.reset_position(),
+                    UiCommand::WindowResetCompleted { serial, success } => {
+                        ui.complete_window_reset(serial, success);
+                    }
                     UiCommand::Refresh => ui.refresh(),
                     UiCommand::Quit => {
                         ui.quit();
@@ -364,6 +379,37 @@ impl Ui {
                 }
             }
         });
+    }
+}
+
+fn take_window_reset_result(
+    pending: &Cell<Option<u64>>,
+    serial: u64,
+    success: bool,
+) -> Option<&'static str> {
+    if pending.get() != Some(serial) {
+        return None;
+    }
+    pending.set(None);
+    Some(if success { "Window reset succeeded" } else { "Window reset failed" })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::take_window_reset_result;
+    use std::cell::Cell;
+
+    #[test]
+    fn reset_result_messages_only_apply_to_the_current_request() {
+        let pending = Cell::new(Some(7));
+        assert_eq!(take_window_reset_result(&pending, 6, true), None);
+        assert_eq!(pending.get(), Some(7));
+        assert_eq!(take_window_reset_result(&pending, 7, true), Some("Window reset succeeded"));
+        assert_eq!(pending.get(), None);
+
+        pending.set(Some(8));
+        assert_eq!(take_window_reset_result(&pending, 8, false), Some("Window reset failed"));
+        assert_eq!(pending.get(), None);
     }
 }
 

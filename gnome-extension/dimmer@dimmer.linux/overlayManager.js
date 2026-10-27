@@ -13,8 +13,13 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {layoutSignature, overlayColor, rectsForMonitor} from './overlayMath.js';
+import {resetWindowFrame, windowMatchesResetFrame} from './windowReset.js';
 
 const HOLE_REFRESH_MS = 150;
+const WINDOW_RESET_RETRY_MS = 50;
+const WINDOW_RESET_MAX_ATTEMPTS = 20;
+const DEFAULT_WINDOW_WIDTH = 1040;
+const DEFAULT_WINDOW_HEIGHT = 700;
 
 function toRect(rectangle) {
     if (!rectangle)
@@ -51,6 +56,8 @@ export class OverlayManager {
         this._overviewShowingId = 0;
         this._overviewHidingId = 0;
         this._unredirectDisabled = null;
+        this._windowResetTimer = 0;
+        this._windowResetRequest = null;
     }
 
     enable() {
@@ -93,6 +100,7 @@ export class OverlayManager {
         this._enabled = false;
 
         this._stopHoleTimer();
+        this._stopWindowReset(true);
         this._destroyScreens();
 
         if (this._overviewShowingId !== 0) {
@@ -126,6 +134,7 @@ export class OverlayManager {
     }
 
     clear() {
+        this._stopWindowReset(true);
         this._state = null;
         this._lastHole = null;
         this._stopHoleTimer();
@@ -137,6 +146,79 @@ export class OverlayManager {
     refresh() {
         if (this._enabled && this._state)
             this._apply();
+    }
+
+    resetWindowPosition(reportResult) {
+        this._stopWindowReset(true);
+        if (!this._enabled || !this._state) {
+            reportResult(false);
+            return;
+        }
+
+        this._windowResetRequest = {
+            reportResult,
+            frame: null,
+            window: null,
+            attempts: 0,
+        };
+        this._windowResetTimer = GLib.timeout_add(
+            GLib.PRIORITY_DEFAULT,
+            WINDOW_RESET_RETRY_MS,
+            () => this._checkWindowReset());
+    }
+
+    _stopWindowReset(reportFailure = false) {
+        if (this._windowResetTimer !== 0) {
+            GLib.source_remove(this._windowResetTimer);
+            this._windowResetTimer = 0;
+        }
+        const request = this._windowResetRequest;
+        this._windowResetRequest = null;
+        if (request && reportFailure)
+            request.reportResult(false);
+    }
+
+    _checkWindowReset() {
+        const request = this._windowResetRequest;
+        if (!request || !this._enabled || !this._state) {
+            this._stopWindowReset(true);
+            return GLib.SOURCE_REMOVE;
+        }
+
+        if (!request.frame) {
+            const window = this._findDimmerWindow(this._state);
+            const monitorIndex = Main.layoutManager.primaryIndex;
+            const workArea = Main.layoutManager.getWorkAreaForMonitor(monitorIndex);
+            request.frame = resetWindowFrame(
+                window,
+                workArea,
+                DEFAULT_WINDOW_WIDTH,
+                DEFAULT_WINDOW_HEIGHT);
+            if (request.frame) {
+                request.window = window;
+                request.attempts = 0;
+            }
+        } else if (windowMatchesResetFrame(request.window, request.frame)) {
+            this._finishWindowReset(true);
+            return GLib.SOURCE_REMOVE;
+        }
+
+        request.attempts++;
+        if (request.attempts >= WINDOW_RESET_MAX_ATTEMPTS) {
+            this._finishWindowReset(false);
+            return GLib.SOURCE_REMOVE;
+        }
+        return GLib.SOURCE_CONTINUE;
+    }
+
+    _finishWindowReset(success) {
+        const request = this._windowResetRequest;
+        if (this._windowResetTimer !== 0) {
+            GLib.source_remove(this._windowResetTimer);
+            this._windowResetTimer = 0;
+        }
+        this._windowResetRequest = null;
+        request?.reportResult(success);
     }
 
     // --- state -> actors --------------------------------------------------
@@ -347,6 +429,11 @@ export class OverlayManager {
         if (!state)
             return null;
 
+        const window = this._findDimmerWindow(state, true);
+        return window ? toRect(window.get_frame_rect()) : null;
+    }
+
+    _findDimmerWindow(state, visibleOnly = false) {
         const wantedAppId = lower(state.window_app_id);
         const wantedClass = lower(state.window_wm_class);
         if (!wantedAppId && !wantedClass)
@@ -356,16 +443,17 @@ export class OverlayManager {
         // get_window_actors() is ordered bottom-to-top; pick the topmost match.
         for (let index = actors.length - 1; index >= 0; index--) {
             const actor = actors[index];
-            if (!actor?.visible)
+            if (visibleOnly && !actor?.visible)
                 continue;
             const window = actor.meta_window ?? actor.get_meta_window?.();
-            if (!window || window.minimized || window.is_hidden?.())
+            if (!window || (visibleOnly && (window.minimized || window.is_hidden?.())))
                 continue;
-            if (window.showing_on_its_workspace && !window.showing_on_its_workspace())
+            if (visibleOnly && window.showing_on_its_workspace &&
+                !window.showing_on_its_workspace())
                 continue;
             if (!this._matchesWindow(window, wantedAppId, wantedClass))
                 continue;
-            return toRect(window.get_frame_rect());
+            return window;
         }
 
         return null;

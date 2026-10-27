@@ -3,5 +3,5 @@
   "name": "Dimmer",
   "description": "Compositor-side dimming overlays and a top-bar indicator for Dimmer for Linux. Settings are managed by the Dimmer application.",
   "shell-version": ["45", "46", "47", "48", "49", "50"],
-  "version": 2
+  "version": 3
 }

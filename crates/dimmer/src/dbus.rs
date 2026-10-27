@@ -53,10 +53,19 @@ impl DimmerService {
         self.shared.send_ui(crate::shared::UiCommand::HideWindow);
     }
 
-    /// Presents the window at its default size.
+    /// Requests a reset from the UI and GNOME Shell extension.
     #[zbus(name = "ResetWindowPosition")]
     fn reset_window_position(&self) {
         self.shared.send_ui(crate::shared::UiCommand::ResetWindowPosition);
+    }
+
+    /// Reports whether GNOME Shell applied a reset and confirmed the final geometry.
+    #[zbus(name = "WindowResetCompleted")]
+    #[allow(clippy::needless_pass_by_value)]
+    fn window_reset_completed(&self, serial: String, success: bool) {
+        if let Ok(serial) = serial.parse::<u64>() {
+            self.shared.send_ui(crate::shared::UiCommand::WindowResetCompleted { serial, success });
+        }
     }
 
     /// Updates the master dimmer.

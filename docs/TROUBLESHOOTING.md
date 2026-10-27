@@ -35,7 +35,7 @@ though the extension still reports `ACTIVE`. The Shell only notices a different
 already-loaded extension, log out and back in (or reboot), then check:
 
 ```bash
-gnome-extensions info dimmer@dimmer.linux   # Version: 2
+gnome-extensions info dimmer@dimmer.linux   # Version: 3
 ```
 
 The app's Debug tab also shows the connected extension version. If it still
@@ -123,9 +123,10 @@ panel would also dim the emergency/lock UI.
 
 ## Window placement or taskbar behaviour
 
-Wayland compositors own window placement. **Reset window position** restores the
-default size and presents the window; it cannot move it to a global screen
-coordinate. Header-bar dragging works when **Movable window** is on.
+Wayland applications cannot position their own windows. **Reset window position**
+asks the GNOME Shell extension to restore the default size and center the window
+in the primary monitor's work area. Header-bar dragging works when **Movable
+window** is on.
 
 **Show in taskbar** is stored for settings compatibility but disabled in the UI:
 GTK4/Wayland has no API to independently show or hide a window in the taskbar.

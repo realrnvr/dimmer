@@ -23,6 +23,7 @@ const FILES: &[(&str, &str)] = &[
         include_str!("../../../gnome-extension/dimmer@dimmer.linux/overlayManager.js"),
     ),
     ("overlayMath.js", include_str!("../../../gnome-extension/dimmer@dimmer.linux/overlayMath.js")),
+    ("windowReset.js", include_str!("../../../gnome-extension/dimmer@dimmer.linux/windowReset.js")),
     ("stylesheet.css", include_str!("../../../gnome-extension/dimmer@dimmer.linux/stylesheet.css")),
 ];
 

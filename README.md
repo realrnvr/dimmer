@@ -243,6 +243,7 @@ Extension tests:
 ```bash
 # Pure geometry/colour maths
 gjs -m gnome-extension/tests/overlay-math.test.js
+gjs -m gnome-extension/tests/window-reset.test.js
 
 # Full private GNOME Shell (headless; does not touch the real session)
 DIMMER_BIN=$PWD/target/release/dimmer timeout 240 \
@@ -315,9 +316,10 @@ binary, launcher, icon, metainfo, extension directory and autostart entry.
 - **"Show in taskbar" is disabled.** GTK4/Wayland exposes no way to hide or show a
   window in the taskbar independently. The preference is still stored for file
   compatibility, and the row explains the limitation.
-- **"Reset window position" resets size and presents the window.** Wayland
-  compositors own window placement, so there is no global bottom-right position to
-  restore. Header-bar dragging is available when Movable window is on.
+- **"Reset window position" restores the default size and centers the window on
+  the primary monitor.** GNOME Shell performs the move because Wayland applications
+  cannot position their own windows. Header-bar dragging is available when Movable
+  window is on.
 - **Monitor values are preserved across hot-plug** rather than deleting the whole
   settings file, unlike the original.
 - **Non-dimmable window defaults to off**, matching the original 2.0.1 setting.

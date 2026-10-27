@@ -152,6 +152,26 @@ gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell \
     'JSON.stringify(global.get_window_actors().map(a => { const w = a.meta_window; return {app: w.get_gtk_application_id(), cls: w.get_wm_class(), title: w.get_title(), rect: w.get_frame_rect()}; }))' \
     2>&1 || true
 
+echo "--- reset window position and size ---"
+gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell \
+    --method org.gnome.Shell.Eval \
+    'global.get_window_actors().map(a => a.meta_window).find(w => w.get_gtk_application_id() === "io.github.dimmer.Linux")?.maximize(); "maximized"' \
+    2>&1 || true
+gdbus call --session --dest io.github.dimmer.Linux \
+    --object-path /io/github/dimmer/Linux \
+    --method io.github.dimmer.Linux.ResetWindowPosition 2>&1 || true
+sleep 0.5
+reset_geometry=$(gdbus call --session --dest org.gnome.Shell \
+    --object-path /org/gnome/Shell --method org.gnome.Shell.Eval \
+    '(() => { const w = global.get_window_actors().map(a => a.meta_window).find(candidate => candidate.get_gtk_application_id() === "io.github.dimmer.Linux"); const i = Main.layoutManager.primaryIndex; const a = Main.layoutManager.getWorkAreaForMonitor(i); const r = w?.get_frame_rect(); if (!r || !a) return false; const width = Math.min(1040, a.width); const height = Math.min(700, a.height); return !w.maximized_horizontally && !w.maximized_vertically && r.width === width && r.height === height && Math.abs(r.x - (a.x + (a.width - width) / 2)) <= 1 && Math.abs(r.y - (a.y + (a.height - height) / 2)) <= 1; })()' \
+    2>&1)
+echo "reset geometry: $reset_geometry"
+if ! echo "$reset_geometry" | grep -q 'true'; then
+    echo "FAIL: reset should center and resize the window on the primary work area" >&2
+    exit 1
+fi
+echo "PASS: reset restored the default size and primary-monitor position"
+
 echo "--- leave overview / close welcome tour ---"
 # The Fedora "Welcome" tour is a Shell modal dialog (WelcomeDialog).  Its
 # lightbox dims everything below it, including our overlay, so close it before

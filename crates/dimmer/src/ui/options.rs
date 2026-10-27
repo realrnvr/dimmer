@@ -81,7 +81,7 @@ impl OptionsPage {
             switch_row("Movable window", "Allow dragging the window by its header bar.");
         let reset_row = adw::ActionRow::builder()
             .title("Window position")
-            .subtitle("Restore the default size and bring the window to the front.")
+            .subtitle("Center the default-size window on the primary monitor and bring it forward.")
             .build();
         let reset = gtk::Button::with_label("Reset");
         reset.set_valign(gtk::Align::Center);

@@ -1,7 +1,7 @@
 //! Thread-safe application state shared by GTK, D-Bus and the diagnostics page.
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -35,6 +35,7 @@ pub enum UiCommand {
     ShowWindow,
     HideWindow,
     ResetWindowPosition,
+    WindowResetCompleted { serial: u64, success: bool },
     Refresh,
     Quit,
 }
@@ -88,6 +89,7 @@ pub struct SharedState {
     monitors: Mutex<Vec<MonitorInfo>>,
     session: SessionInfo,
     window_visible: AtomicBool,
+    window_reset_serial: AtomicU64,
     extension_connected: AtomicBool,
     extension_version: Mutex<Option<String>>,
     last_error: Mutex<Option<String>>,
@@ -159,6 +161,7 @@ impl SharedState {
             monitors: Mutex::new(Vec::new()),
             session,
             window_visible: AtomicBool::new(false),
+            window_reset_serial: AtomicU64::new(0),
             extension_connected: AtomicBool::new(false),
             extension_version: Mutex::new(None),
             last_error: Mutex::new(None),
@@ -332,6 +335,7 @@ impl SharedState {
             window_visible: self.window_visible.load(Ordering::SeqCst),
             window_app_id: dimmer_core::APP_ID.to_owned(),
             window_wm_class: WINDOW_WM_CLASS.to_owned(),
+            window_reset_serial: self.window_reset_serial.load(Ordering::SeqCst),
         };
         let state = build_state(&settings, &active, &monitors, &context);
         state.to_json().unwrap_or_else(|error| {
@@ -614,12 +618,16 @@ impl SharedState {
         Ok(())
     }
 
-    /// Resets the saved window position hint (Wayland compositors may ignore it).
-    pub fn reset_saved_position(&self) {
-        self.ui_mutate(|settings| {
+    /// Requests the GNOME Shell extension to restore the window's default size and position.
+    pub fn request_window_reset(&self) -> u64 {
+        if let Ok(mut settings) = self.settings.lock() {
             settings.position.left = Some(0.0);
             settings.position.top = Some(0.0);
-        });
+        }
+        let serial = self.window_reset_serial.fetch_add(1, Ordering::SeqCst).wrapping_add(1);
+        self.bump(None);
+        self.send_ui(UiCommand::Refresh);
+        serial
     }
 
     /// Builds the diagnostics report for the Debug page.

@@ -1,7 +1,7 @@
 // GNOME Shell adapter for Dimmer for Linux.
 //
-// The extension only renders what the Rust application publishes over D-Bus.
-// It owns no settings and makes no policy decisions.
+// The extension renders the overlay state published by the Rust application
+// and applies GNOME-specific window placement requests. It owns no settings.
 
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
@@ -16,6 +16,7 @@ export default class DimmerExtension extends Extension {
         this._client = new DimmerDbusClient(this.metadata.version ?? 1);
         this._overlays = new OverlayManager();
         this._indicator = new DimmerIndicator(this._client);
+        this._lastWindowResetSerial = null;
 
         this._overlays.enable();
         Main.panel.addToStatusArea(this.uuid, this._indicator, 0, 'right');
@@ -23,6 +24,12 @@ export default class DimmerExtension extends Extension {
         this._clientIds = [
             this._client.connect('state-changed', (_client, state) => {
                 this._overlays?.setState(state);
+                const resetSerial = Number(state.window_reset_serial ?? 0);
+                if (this._lastWindowResetSerial !== null &&
+                    resetSerial !== this._lastWindowResetSerial)
+                    this._overlays?.resetWindowPosition(
+                        success => this._client?.windowResetCompleted(resetSerial, success));
+                this._lastWindowResetSerial = resetSerial;
             }),
             this._client.connect('visibility-changed', () => {
                 // StateChanged usually follows immediately; refreshing here
@@ -43,6 +50,7 @@ export default class DimmerExtension extends Extension {
                 this._client.disconnect(id);
         }
         this._clientIds = null;
+        this._lastWindowResetSerial = null;
 
         this._client?.extensionDisconnected();
         this._client?.destroy();
