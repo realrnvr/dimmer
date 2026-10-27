@@ -217,6 +217,6 @@ mod tests {
     fn empty_monitor_list_produces_no_screens() {
         let settings = AppSettings::default();
         let state = build_state(&settings, &[], &[], &StateContext::default());
-        assert!(state.screens.is_empty());
+        assert_eq!(state.screens, Vec::new());
     }
 }

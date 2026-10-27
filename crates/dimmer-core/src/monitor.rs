@@ -211,7 +211,7 @@ mod tests {
         let mut settings = AppSettings::default();
         let before = settings.clone();
         let active = sync_screens(&mut settings, &[]);
-        assert!(active.is_empty());
+        assert_eq!(active, Vec::new());
         assert_eq!(settings, before);
     }
 }
