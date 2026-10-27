@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Install GTK build dependencies
+        run: sudo apt-get update && sudo apt-get install --yes libgtk-4-dev libadwaita-1-dev pkg-config
+      - name: Check formatting
+        working-directory: .
+        run: cargo fmt --all --check
+      - name: Run Rust tests
+        working-directory: .
+        run: cargo test --locked --workspace
+      - name: Run Clippy
+        working-directory: .
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+      - name: Check generated Flatpak crate sources
+        working-directory: .
+        run: |
+          python3 scripts/generate-flatpak-cargo-sources.py
+          git diff --exit-code -- flatpak/cargo-sources.json
+
+  extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GNOME extension tools
+        run: sudo apt-get update && sudo apt-get install --yes gjs gnome-shell unzip
+      - name: Check extension geometry and colour math
+        working-directory: .
+        run: gjs -m gnome-extension/tests/overlay-math.test.js
+      - name: Package the extension
+        working-directory: .
+        run: scripts/pack-extension.sh
+
+  headless-shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install GUI and Shell dependencies
+        run: sudo apt-get update && sudo apt-get install --yes libgtk-4-dev libadwaita-1-dev pkg-config gjs gnome-shell dbus-x11 unzip
+      - name: Build Dimmer
+        working-directory: .
+        run: cargo build --locked --release --package dimmer
+      - name: Exercise the extension in a private GNOME Shell
+        working-directory: .
+        run: >-
+          DIMMER_BIN=$PWD/target/release/dimmer timeout 240
+          dbus-run-session -- bash gnome-extension/tests/headless-shell.sh
+      - name: Exercise two virtual monitors in a private GNOME Shell
+        working-directory: .
+        run: >-
+          DIMMER_BIN=$PWD/target/release/dimmer timeout 180
+          dbus-run-session -- bash gnome-extension/tests/multimon-shell.sh
+
+  gui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install GTK, GStreamer, and headless desktop dependencies
+        run: >-
+          sudo apt-get update && sudo apt-get install --yes
+          libgtk-4-dev libadwaita-1-dev pkg-config libglib2.0-dev
+          libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
+          gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+          gstreamer1.0-pipewire mutter pipewire wireplumber dbus-daemon at-spi2-core
+      - name: Build Dimmer
+        working-directory: .
+        run: cargo build --locked --release --package dimmer
+      - name: Run headless GTK GUI suites
+        working-directory: .
+        run: DIMMER_BIN=$PWD/target/release/dimmer gui-tests/run.sh
+
+  flatpak:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Flatpak Builder
+        run: sudo apt-get update && sudo apt-get install --yes flatpak flatpak-builder
+      - name: Configure Flathub
+        run: flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+      - name: Build the Flatpak
+        working-directory: .
+        run: >-
+          flatpak-builder --user --install-deps-from=flathub --force-clean
+          --repo=flatpak/repo flatpak/build flatpak/io.github.dimmer.Linux.yml
+

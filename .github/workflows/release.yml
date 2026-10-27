@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release-assets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Install release build dependencies
+        run: sudo apt-get update && sudo apt-get install --yes libgtk-4-dev libadwaita-1-dev pkg-config gjs gnome-shell dbus-x11 unzip flatpak flatpak-builder
+      - name: Ensure tag matches the app version
+        working-directory: .
+        run: |
+          package_version=$(cargo metadata --locked --no-deps --format-version 1 | python3 -c 'import json,sys; print(next(package["version"] for package in json.load(sys.stdin)["packages"] if package["name"] == "dimmer"))')
+          tag_version=${GITHUB_REF_NAME#v}
+          test "$package_version" = "$tag_version" || {
+            echo "Release tag $GITHUB_REF_NAME does not match Cargo version $package_version" >&2
+            exit 1
+          }
+      - name: Verify Rust code
+        working-directory: .
+        run: |
+          cargo fmt --all --check
+          cargo test --locked --workspace
+          cargo clippy --locked --workspace --all-targets -- -D warnings
+      - name: Build application
+        working-directory: .
+        run: cargo build --locked --release --package dimmer
+      - name: Package GNOME extension
+        working-directory: .
+        run: scripts/pack-extension.sh
+      - name: Check extension geometry and colour math
+        working-directory: .
+        run: gjs -m gnome-extension/tests/overlay-math.test.js
+      - name: Check extension in private GNOME Shell sessions
+        working-directory: .
+        run: |
+          DIMMER_BIN=$PWD/target/release/dimmer timeout 240 \
+            dbus-run-session -- bash gnome-extension/tests/headless-shell.sh
+          DIMMER_BIN=$PWD/target/release/dimmer timeout 180 \
+            dbus-run-session -- bash gnome-extension/tests/multimon-shell.sh
+      - name: Build Flatpak for release validation
+        run: |
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak-builder --user --install-deps-from=flathub --force-clean \
+            --repo=flatpak/repo flatpak/build flatpak/io.github.dimmer.Linux.yml
+      - name: Stage release assets
+        working-directory: .
+        run: |
+          mkdir -p release
+          install -Dm755 scripts/install-flatpak.sh release/install-flatpak.sh
+          cp dist/dimmer@dimmer.linux.shell-extension.zip release/
+          (cd release && sha256sum install-flatpak.sh dimmer@dimmer.linux.shell-extension.zip > SHA256SUMS)
+      - name: Publish GitHub release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" release/* --generate-notes
