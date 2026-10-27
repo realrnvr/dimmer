@@ -394,25 +394,6 @@ fn take_window_reset_result(
     Some(if success { "Window reset succeeded" } else { "Window reset failed" })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::take_window_reset_result;
-    use std::cell::Cell;
-
-    #[test]
-    fn reset_result_messages_only_apply_to_the_current_request() {
-        let pending = Cell::new(Some(7));
-        assert_eq!(take_window_reset_result(&pending, 6, true), None);
-        assert_eq!(pending.get(), Some(7));
-        assert_eq!(take_window_reset_result(&pending, 7, true), Some("Window reset succeeded"));
-        assert_eq!(pending.get(), None);
-
-        pending.set(Some(8));
-        assert_eq!(take_window_reset_result(&pending, 8, false), Some("Window reset failed"));
-        assert_eq!(pending.get(), None);
-    }
-}
-
 #[allow(clippy::cast_possible_truncation)]
 fn install_drag_handle(
     handle: &impl IsA<gtk::Widget>,
@@ -511,4 +492,23 @@ fn extension_help(shared: &SharedState, window: &adw::ApplicationWindow) {
         "Install the bundled GNOME Shell extension with:\n\n    dimmer --install-extension\n\n(If you are running from the source tree, scripts/install.sh also installs the application and extension.) Then log out and back in. The extension lives in ~/.local/share/gnome-shell/extensions/dimmer@dimmer.linux.\n\nOn Wayland, a normal application cannot draw over other apps, so the extension is required."
     };
     show_message(window, "GNOME extension required", body);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::take_window_reset_result;
+    use std::cell::Cell;
+
+    #[test]
+    fn reset_result_messages_only_apply_to_the_current_request() {
+        let pending = Cell::new(Some(7));
+        assert_eq!(take_window_reset_result(&pending, 6, true), None);
+        assert_eq!(pending.get(), Some(7));
+        assert_eq!(take_window_reset_result(&pending, 7, true), Some("Window reset succeeded"));
+        assert_eq!(pending.get(), None);
+
+        pending.set(Some(8));
+        assert_eq!(take_window_reset_result(&pending, 8, false), Some("Window reset failed"));
+        assert_eq!(pending.get(), None);
+    }
 }
