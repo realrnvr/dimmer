@@ -1,0 +1,17 @@
+/* Screen identity labels and monitor boundaries.  Dim rectangles themselves
+ * are painted with inline background colours so their alpha can follow the
+ * live dim percentage. */
+
+.dimmer-screen-id {
+    color: #ffffff;
+    font-size: 128px;
+    font-weight: 700;
+    padding: 0 6px;
+    background-color: transparent;
+}
+
+.dimmer-boundary {
+    border: 5px solid #ffff00;
+    border-radius: 0;
+    background-color: transparent;
+}
