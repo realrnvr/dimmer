@@ -1,0 +1,45 @@
+app-id: io.github.dimmer.Linux
+runtime: org.gnome.Platform
+runtime-version: "50"
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: dimmer
+finish-args:
+  - --device=dri
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --own-name=io.github.dimmer.Linux
+  - --talk-name=io.github.dimmer.Linux
+  - --filesystem=xdg-data/gnome-shell/extensions:ro
+modules:
+  - name: dimmer
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin
+      env:
+        CARGO_HOME: /run/build/dimmer/cargo
+        CARGO_NET_OFFLINE: "true"
+    build-commands:
+      - mkdir -p .cargo
+      - cp cargo/config .cargo/config.toml
+      - cargo --offline fetch --locked --manifest-path Cargo.toml
+      - cargo build --offline --locked --release --package dimmer
+      - install -Dm0755 target/release/dimmer /app/bin/dimmer
+      - install -Dm0644 data/io.github.dimmer.Linux.desktop /app/share/applications/io.github.dimmer.Linux.desktop
+      - install -Dm0644 data/io.github.dimmer.Linux.metainfo.xml /app/share/metainfo/io.github.dimmer.Linux.metainfo.xml
+      - install -Dm0644 data/icons/hicolor/scalable/apps/io.github.dimmer.Linux.svg /app/share/icons/hicolor/scalable/apps/io.github.dimmer.Linux.svg
+    sources:
+      - type: dir
+        path: ..
+      - cargo-sources.json
+      - type: inline
+        contents: |
+          [source.crates-io]
+          replace-with = "vendored-sources"
+
+          [source.vendored-sources]
+          directory = "/run/build/dimmer/cargo/vendor"
+        dest: cargo
+        dest-filename: config

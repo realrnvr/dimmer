@@ -1,0 +1,7 @@
+/target/
+/gui-tests/target/
+/flatpak/build/
+/flatpak/repo/
+/flatpak/.flatpak-builder/
+/dist/*.zip
+/release/
