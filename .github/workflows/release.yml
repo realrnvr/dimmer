@@ -32,6 +32,8 @@ jobs:
           cargo fmt --all --check
           cargo test --locked --workspace
           cargo clippy --locked --workspace --all-targets -- -D warnings
+      - name: Test GitHub release installer
+        run: bash scripts/tests/install-github.sh
       - name: Build application
         working-directory: .
         run: cargo build --locked --release --package dimmer
@@ -57,9 +59,20 @@ jobs:
         working-directory: .
         run: |
           mkdir -p release
+          mkdir -p release-bundle/data/icons/hicolor/scalable/apps
+          install -Dm755 target/release/dimmer release-bundle/dimmer
+          install -Dm755 scripts/install.sh release-bundle/scripts/install.sh
+          install -Dm644 data/io.github.dimmer.Linux.desktop release-bundle/data/io.github.dimmer.Linux.desktop
+          install -Dm644 data/io.github.dimmer.Linux.metainfo.xml release-bundle/data/io.github.dimmer.Linux.metainfo.xml
+          install -Dm644 data/icons/hicolor/scalable/apps/io.github.dimmer.Linux.svg \
+            release-bundle/data/icons/hicolor/scalable/apps/io.github.dimmer.Linux.svg
+          tar -C release-bundle -czf release/dimmer-linux-x86_64.tar.gz \
+            dimmer scripts data
+          install -Dm755 scripts/install-github.sh release/install-github.sh
           install -Dm755 scripts/install-flatpak.sh release/install-flatpak.sh
           cp dist/dimmer@dimmer.linux.shell-extension.zip release/
-          (cd release && sha256sum install-flatpak.sh dimmer@dimmer.linux.shell-extension.zip > SHA256SUMS)
+          (cd release && sha256sum dimmer-linux-x86_64.tar.gz install-github.sh install-flatpak.sh \
+            dimmer@dimmer.linux.shell-extension.zip > SHA256SUMS)
       - name: Publish GitHub release assets
         env:
           GH_TOKEN: ${{ github.token }}

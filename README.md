@@ -30,40 +30,48 @@ Dimmer targets **GNOME on Wayland** with GNOME Shell 45–50. The compositor-sid
 GNOME extension is required to dim other windows, so KDE, Xfce, other desktop
 environments, and X11 are not supported by this release.
 
-The first Flatpak release targets x86_64 and supplies GTK and libadwaita
-consistently across distributions. The GNOME Shell extension is installed
-separately on the host. Other architectures can try a source build but are not
-release targets yet.
-The source build needs Rust 1.85 or newer, GTK 4.12+, libadwaita 1.4+ development
-headers, `pkg-config`, and the GNOME extension tools.
+Starting with the next tagged GitHub release, releases will provide a native
+x86_64 Linux build. It uses GTK 4.12+ and libadwaita 1.4+ from the system, and
+the GNOME Shell extension is embedded in the app binary. Other architectures can
+try a source build but are not release targets yet. A source build needs Rust
+1.85 or newer, GTK 4.12+, libadwaita 1.4+ development headers, `pkg-config`, and
+the GNOME extension tools.
 Some distributions package an older Rust compiler; check `rustc --version` and
 use a current Rust toolchain if it is below 1.85.
 
 ## Install
 
-### Recommended: Flatpak
+### Recommended: GitHub release
 
-This install path becomes available once the Flathub submission is accepted.
-From the repository root:
+After the next tagged release is published, download and run its installer for
+the latest x86_64 release:
 
 ```bash
-./scripts/install-flatpak.sh
+curl --fail --location --output /tmp/install-dimmer.sh \
+  https://github.com/realrnvr/dimmer/releases/latest/download/install-github.sh
+bash /tmp/install-dimmer.sh
 ```
 
-The script adds Flathub as a user remote if needed, installs or updates the app
-for the current user, downloads and verifies the matching host extension release
-asset, and installs it for the current user. It does not use `sudo` or install
-system packages. Log out and back in after installing the extension, then enable
-it if needed:
+The installer verifies the downloaded release archive, then installs the app,
+launcher, icon, metadata, and embedded GNOME Shell extension for the current
+user. It does not use `sudo` or install system packages. GTK and libadwaita must
+be available on the system. Log out and back in after installing the extension,
+then enable it if needed:
 
 ```bash
 gnome-extensions enable dimmer@dimmer.linux
 ```
 
-Launch from the app grid or run:
+Launch from the app grid or run `dimmer`.
+
+### Flathub
+
+The Flathub install path will be available after the submission is accepted.
+The repository's Flatpak installer can then install or update the app and its
+host GNOME Shell extension:
 
 ```bash
-flatpak run io.github.dimmer.Linux
+./scripts/install-flatpak.sh
 ```
 
 Flatpak keeps settings in its application-specific config directory. Autostart
