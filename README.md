@@ -30,12 +30,11 @@ Dimmer targets **GNOME on Wayland** with GNOME Shell 45–50. The compositor-sid
 GNOME extension is required to dim other windows, so KDE, Xfce, other desktop
 environments, and X11 are not supported by this release.
 
-Starting with the next tagged GitHub release, releases will provide a native
-x86_64 Linux build. It uses GTK 4.12+ and libadwaita 1.4+ from the system, and
-the GNOME Shell extension is embedded in the app binary. Other architectures can
-try a source build but are not release targets yet. A source build needs Rust
-1.85 or newer, GTK 4.12+, libadwaita 1.4+ development headers, `pkg-config`, and
-the GNOME extension tools.
+GitHub releases provide a native x86_64 Linux build. It uses GTK 4.12+ and
+libadwaita 1.4+ from the system, and the GNOME Shell extension is embedded in
+the app binary. Other architectures can try a source build but are not release
+targets yet. A source build needs Rust 1.85 or newer, GTK 4.12+, libadwaita 1.4+
+development headers, `pkg-config`, and the GNOME extension tools.
 Some distributions package an older Rust compiler; check `rustc --version` and
 use a current Rust toolchain if it is below 1.85.
 
@@ -43,13 +42,11 @@ use a current Rust toolchain if it is below 1.85.
 
 ### Recommended: GitHub release
 
-After the next tagged release is published, download and run its installer for
-the latest x86_64 release:
+Install the latest x86_64 release with:
 
 ```bash
-curl --fail --location --output /tmp/install-dimmer.sh \
-  https://github.com/realrnvr/dimmer/releases/latest/download/install-github.sh
-bash /tmp/install-dimmer.sh
+curl --proto '=https' --tlsv1.2 -sSfL \
+  https://github.com/realrnvr/dimmer/releases/latest/download/install-github.sh | bash
 ```
 
 The installer verifies the downloaded release archive, then installs the app,

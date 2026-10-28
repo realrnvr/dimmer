@@ -45,21 +45,46 @@ download() {
     local destination=$2
 
     if [ "$DOWNLOAD_TOOL" = curl ]; then
-        if [ -t 2 ]; then
-            curl --fail --location --progress-bar "$url" --output "$destination"
-        else
-            curl --fail --location --silent "$url" --output "$destination"
-        fi
-    elif [ -t 2 ]; then
-        wget --progress=bar:force:noscroll "$url" --output-document="$destination"
+        curl --fail --location --silent --show-error "$url" --output "$destination"
     else
         wget --quiet "$url" --output-document="$destination"
     fi
 }
 
-log_info "Downloading the latest Dimmer release archive from GitHub."
-download "$RELEASE_BASE/$ARCHIVE_NAME" "$archive" \
-    || die "Could not download the Dimmer release archive."
+download_with_spinner() {
+    local url=$1
+    local destination=$2
+    local frames=(. .. ...)
+    local frame_index=0
+    local download_pid
+    local status
+
+    download "$url" "$destination" &
+    download_pid=$!
+    while kill -0 "$download_pid" 2>/dev/null; do
+        printf '\r[INFO]: Downloading release archive %-3s' "${frames[$frame_index]}" >&2
+        frame_index=$(((frame_index + 1) % ${#frames[@]}))
+        sleep 0.2
+    done
+
+    if wait "$download_pid"; then
+        printf '\r[INFO]: Download complete.   \n' >&2
+    else
+        status=$?
+        printf '\r%-48s\r' '' >&2
+        return "$status"
+    fi
+}
+
+if [ -t 2 ]; then
+    download_with_spinner "$RELEASE_BASE/$ARCHIVE_NAME" "$archive" \
+        || die "Could not download the Dimmer release archive."
+else
+    log_info "Downloading release archive."
+    download "$RELEASE_BASE/$ARCHIVE_NAME" "$archive" \
+        || die "Could not download the Dimmer release archive."
+fi
+
 log_info "Downloading release checksums."
 download "$RELEASE_BASE/SHA256SUMS" "$checksum_file" \
     || die "Could not download the Dimmer release checksum file."
