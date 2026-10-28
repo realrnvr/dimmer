@@ -7,8 +7,9 @@ trap 'rm -rf "$TEMP"' EXIT
 
 FIXTURES=$TEMP/fixtures
 MOCK_BIN=$TEMP/bin
+WGET_BIN=$TEMP/wget-bin
 mkdir -p "$FIXTURES/bundle/data/icons/hicolor/scalable/apps" \
-    "$FIXTURES/bundle/scripts" "$MOCK_BIN"
+    "$FIXTURES/bundle/scripts" "$MOCK_BIN" "$WGET_BIN"
 printf '#!/bin/sh\nexit 0\n' > "$FIXTURES/bundle/dimmer"
 chmod +x "$FIXTURES/bundle/dimmer"
 cp "$ROOT/scripts/install.sh" "$FIXTURES/bundle/scripts/install.sh"
@@ -28,10 +29,15 @@ output=
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --output) output=$2; shift 2 ;;
+        --progress-bar) touch "$INSTALL_TEST_PROGRESS_MARKER"; shift ;;
         http*) url=$1; shift ;;
         *) shift ;;
     esac
 done
+if [ "${INSTALL_TEST_FAIL_DOWNLOAD:-}" = archive ] \
+    && [[ "$url" == */dimmer-linux-x86_64.tar.gz ]]; then
+    exit 22
+fi
 case "$url" in
     */dimmer-linux-x86_64.tar.gz) cp "$INSTALL_TEST_FIXTURES/dimmer-linux-x86_64.tar.gz" "$output" ;;
     */SHA256SUMS) cp "$INSTALL_TEST_FIXTURES/SHA256SUMS" "$output" ;;
@@ -40,23 +46,86 @@ esac
 MOCK_CURL
 chmod +x "$MOCK_BIN/curl"
 
+cat > "$WGET_BIN/wget" <<'MOCK_WGET'
+#!/usr/bin/env bash
+set -euo pipefail
+url=
+output=
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --output-document=*) output=${1#*=}; shift ;;
+        --progress=*) touch "$INSTALL_TEST_PROGRESS_MARKER"; shift ;;
+        --quiet) shift ;;
+        http*) url=$1; shift ;;
+        *) shift ;;
+    esac
+done
+if [ "${INSTALL_TEST_FAIL_DOWNLOAD:-}" = archive ] \
+    && [[ "$url" == */dimmer-linux-x86_64.tar.gz ]]; then
+    exit 22
+fi
+case "$url" in
+    */dimmer-linux-x86_64.tar.gz) cp "$INSTALL_TEST_FIXTURES/dimmer-linux-x86_64.tar.gz" "$output" ;;
+    */SHA256SUMS) cp "$INSTALL_TEST_FIXTURES/SHA256SUMS" "$output" ;;
+    *) echo "Unexpected test URL: $url" >&2; exit 1 ;;
+esac
+MOCK_WGET
+chmod +x "$WGET_BIN/wget"
+
+for tool in bash cp dirname env grep install mkdir mktemp pwd rm sed sha256sum tar touch; do
+    ln -s "$(command -v "$tool")" "$WGET_BIN/$tool"
+done
+
 export INSTALL_TEST_FIXTURES=$FIXTURES
 export PATH=$MOCK_BIN:$PATH
 
-bash "$ROOT/scripts/install-github.sh" --prefix "$TEMP/prefix" --no-enable
+INSTALL_TEST_PROGRESS_MARKER=$TEMP/non-tty-progress
+export INSTALL_TEST_PROGRESS_MARKER
+bash "$ROOT/scripts/install-github.sh" --prefix "$TEMP/prefix" --no-enable \
+    > "$TEMP/non-tty.log" 2>&1
+[ ! -e "$INSTALL_TEST_PROGRESS_MARKER" ]
+grep -F '[INFO]:' "$TEMP/non-tty.log" >/dev/null
+! grep -F '[ERROR]:' "$TEMP/non-tty.log" >/dev/null
 [ -x "$TEMP/prefix/bin/dimmer" ]
 [ -f "$TEMP/prefix/share/applications/io.github.dimmer.Linux.desktop" ]
 [ -f "$TEMP/prefix/share/icons/hicolor/scalable/apps/io.github.dimmer.Linux.svg" ]
 [ -f "$TEMP/prefix/share/metainfo/io.github.dimmer.Linux.metainfo.xml" ]
+
+if command -v script >/dev/null 2>&1; then
+    INSTALL_TEST_PROGRESS_MARKER=$TEMP/tty-progress
+    export INSTALL_TEST_PROGRESS_MARKER
+    script -qec "bash '$ROOT/scripts/install-github.sh' --prefix '$TEMP/tty-prefix' --no-enable" \
+        /dev/null > "$TEMP/tty.log" 2>&1
+    [ -e "$INSTALL_TEST_PROGRESS_MARKER" ]
+    grep -F '[INFO]:' "$TEMP/tty.log" >/dev/null
+
+    INSTALL_TEST_PROGRESS_MARKER=$TEMP/wget-progress
+    export INSTALL_TEST_PROGRESS_MARKER
+    bash_bin=$(command -v bash)
+    script_bin=$(command -v script)
+    "$script_bin" -qec "PATH='$WGET_BIN' '$bash_bin' '$ROOT/scripts/install-github.sh' --prefix '$TEMP/wget-prefix' --no-enable" \
+        /dev/null > "$TEMP/wget-tty.log" 2>&1
+    [ -e "$INSTALL_TEST_PROGRESS_MARKER" ]
+    grep -F '[WARNING]: curl is unavailable; using wget.' "$TEMP/wget-tty.log" >/dev/null
+fi
 
 printf '%064d  dimmer-linux-x86_64.tar.gz\n' 0 > "$FIXTURES/SHA256SUMS"
 if bash "$ROOT/scripts/install-github.sh" --prefix "$TEMP/rejected" >"$TEMP/output" 2>&1; then
     echo 'Installer accepted an archive with an invalid checksum.' >&2
     exit 1
 fi
+grep -F '[ERROR]:' "$TEMP/output" >/dev/null
 [ ! -e "$TEMP/rejected/bin/dimmer" ] || {
     echo 'Installer wrote files after a checksum failure.' >&2
     exit 1
 }
+
+INSTALL_TEST_FAIL_DOWNLOAD=archive
+export INSTALL_TEST_FAIL_DOWNLOAD
+if bash "$ROOT/scripts/install-github.sh" --prefix "$TEMP/download-failed" >"$TEMP/output" 2>&1; then
+    echo 'Installer accepted a failed archive download.' >&2
+    exit 1
+fi
+grep -F '[ERROR]: Could not download the Dimmer release archive.' "$TEMP/output" >/dev/null
 
 echo 'GitHub installer checks passed.'
