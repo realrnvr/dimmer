@@ -35,7 +35,7 @@ though the extension still reports `ACTIVE`. The Shell only notices a different
 already-loaded extension, log out and back in (or reboot), then check:
 
 ```bash
-gnome-extensions info dimmer@dimmer.linux   # Version: 3
+gnome-extensions info dimmer@dimmer.linux   # Version: 4
 ```
 
 The app's Debug tab also shows the connected extension version. If it still
@@ -51,13 +51,13 @@ Common causes:
 
 - The extension directory is missing files. For a native install, reinstall with
   `dimmer --install-extension`; for Flatpak, use `scripts/install-flatpak.sh`.
-  Check that all seven files are present:
+  Check that all eight files are present:
   `metadata.json`, `extension.js`, `dbusClient.js`, `indicator.js`,
-  `overlayManager.js`, `overlayMath.js`, `stylesheet.css`.
+  `overlayManager.js`, `overlayMath.js`, `windowReset.js`, `stylesheet.css`.
 - A stale copy exists in another XDG data directory. Check
   `$XDG_DATA_HOME/gnome-shell/extensions/dimmer@dimmer.linux` and
   `~/.local/share/gnome-shell/extensions/dimmer@dimmer.linux`.
-- The Shell version is outside 45–50. `metadata.json` declares the supported
+- The Shell version is outside 45–51. `metadata.json` declares the supported
   range; a future Shell may need a compatibility update.
 - The session is X11 or another compositor. This port targets GNOME on Wayland.
 

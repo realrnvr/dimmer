@@ -38,9 +38,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install GNOME extension tools
         run: sudo apt-get update && sudo apt-get install --yes gjs gnome-shell unzip
-      - name: Check extension geometry and colour math
+      - name: Check extension metadata, geometry and colour math
         working-directory: .
-        run: gjs -m gnome-extension/tests/overlay-math.test.js
+        run: |
+          gjs -m gnome-extension/tests/metadata.test.js
+          gjs -m gnome-extension/tests/overlay-math.test.js
+          gjs -m gnome-extension/tests/window-reset.test.js
       - name: Package the extension
         working-directory: .
         run: scripts/pack-extension.sh

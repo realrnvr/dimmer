@@ -44,6 +44,8 @@ export default class DimmerExtension extends Extension {
         this._client.enable();
     }
 
+    // GNOME Shell 51 rejects an async disable(); keep every teardown call
+    // synchronous and complete before returning.
     disable() {
         if (this._client && this._clientIds) {
             for (const id of this._clientIds)

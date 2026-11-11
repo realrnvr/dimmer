@@ -3,8 +3,10 @@
 ## 1. Why a GNOME extension is part of a Rust app
 
 Dimmer for Linux targets GNOME on Wayland, with Fedora Workstation as the
-development and reference system. The initial extension metadata supports GNOME
-Shell 45–50; other desktop environments and X11 are outside this release's scope.
+development and reference system. The extension metadata supports GNOME Shell
+45–51 — every release of the ESModule extension API through the current stable
+shell — while other desktop environments and X11 remain outside this release's
+scope.
 
 Wayland deliberately prevents one application from drawing over, positioning itself
 over, or observing other applications. GNOME Shell does not implement
@@ -172,8 +174,18 @@ Writes are atomic (temp file + rename). Malformed files are backed up to
 - Overlays are hidden while the overview is open and restored when it closes.
 - `trackFullscreen: false` so fullscreen apps on one monitor do not hide overlays
   on other monitors.
-- Compositor unredirect is disabled while the extension is active (GNOME 47+:
-  `global.compositor.disable_unredirect()`; older: `Meta.disable_unredirect_for_display`).
+- Compositor unredirect is disabled while the extension is active. The shell
+  API is feature-detected: `global.compositor.disable_unredirect()` is used where
+  available, with the legacy `Meta.disable_unredirect_for_display()` path
+  retained as a fallback for older releases.
+- The extension targets the stable ESM API across GNOME 45–51. GNOME 51 removed
+  the `vertical` St property and rejects an async `disable()`; neither is used
+  here. The legacy `Meta.disable_unredirect_for_display()` helpers are absent
+  from current releases, so the compositor API is preferred and the old call is
+  only a feature-detected fallback. Popup-menu calls use the no-argument form,
+  valid both before and after GNOME 51's parameter-object change.
+  `metadata.json` declares only released shell versions, so the next development
+  cycle is added after its API freezes.
 - Because the overlay is below Shell chrome, Shell modal dialogs (for example the
   first-login `WelcomeDialog`) dim it with their lightbox. This is intentional:
   the dialog must stay readable and on top.

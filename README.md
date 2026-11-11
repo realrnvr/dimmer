@@ -18,7 +18,7 @@ Dimmer therefore has two parts:
 | Part | Language | Role |
 |---|---|---|
 | `dimmer` | Rust + GTK4/libadwaita | Settings UI, state, validation, persistence, D-Bus service, diagnostics |
-| `dimmer@dimmer.linux` | GJS (GNOME Shell 45–50) | Click-through dim overlays, screen IDs, boundaries, top-bar indicator |
+| `dimmer@dimmer.linux` | GJS (GNOME Shell 45–51) | Click-through dim overlays, screen IDs, boundaries, top-bar indicator |
 
 The Rust app owns all settings and logic. The extension is a renderer and remote
 control: it receives state over D-Bus and sends slider/menu changes back. If the
@@ -26,9 +26,11 @@ app exits, the extension removes its overlays automatically.
 
 ## Supported systems
 
-Dimmer targets **GNOME on Wayland** with GNOME Shell 45–50. The compositor-side
-GNOME extension is required to dim other windows, so KDE, Xfce, other desktop
-environments, and X11 are not supported by this release.
+Dimmer targets **GNOME on Wayland** with GNOME Shell 45–51. This is the full
+range of GNOME Shell releases that use the ESModule extension API (GNOME 45 and
+newer); 45 remains the oldest supported release and 51 is the current stable
+release. The compositor-side GNOME extension is required to dim other windows, so
+KDE, Xfce, other desktop environments, and X11 are not supported by this release.
 
 GitHub releases provide a native x86_64 Linux build. It uses GTK 4.12+ and
 libadwaita 1.4+ from the system, and the GNOME Shell extension is embedded in
@@ -246,7 +248,8 @@ PKG_CONFIG_PATH=/path/to/lib/pkgconfig cargo build --release
 Extension tests:
 
 ```bash
-# Pure geometry/colour maths
+# Metadata, pure geometry/colour maths and window-reset helpers
+gjs -m gnome-extension/tests/metadata.test.js
 gjs -m gnome-extension/tests/overlay-math.test.js
 gjs -m gnome-extension/tests/window-reset.test.js
 

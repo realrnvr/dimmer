@@ -5,7 +5,6 @@
 // screen, menus).  Each screen gets a group with up to four dim rectangles so
 // the settings window can punch a hole when "Non-dimmable window" is enabled.
 
-import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import St from 'gi://St';
@@ -477,6 +476,10 @@ export class OverlayManager {
     // --- compositor unredirect -------------------------------------------
 
     _disableUnredirect() {
+        // Current GNOME Shell exposes unredirect control on the compositor.
+        // The Meta.Display helpers used by older releases are no longer
+        // present, so keep the compositor path first and the legacy path as a
+        // feature-detected fallback.
         const compositor = global.compositor;
         if (typeof compositor?.disable_unredirect === 'function') {
             compositor.disable_unredirect();

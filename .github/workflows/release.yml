@@ -40,9 +40,12 @@ jobs:
       - name: Package GNOME extension
         working-directory: .
         run: scripts/pack-extension.sh
-      - name: Check extension geometry and colour math
+      - name: Check extension metadata, geometry and colour math
         working-directory: .
-        run: gjs -m gnome-extension/tests/overlay-math.test.js
+        run: |
+          gjs -m gnome-extension/tests/metadata.test.js
+          gjs -m gnome-extension/tests/overlay-math.test.js
+          gjs -m gnome-extension/tests/window-reset.test.js
       - name: Check extension in private GNOME Shell sessions
         working-directory: .
         run: |

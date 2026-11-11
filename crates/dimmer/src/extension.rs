@@ -102,7 +102,15 @@ mod tests {
 
         let metadata = fs::read_to_string(directory.join("metadata.json")).unwrap();
         assert!(metadata.contains(EXTENSION_UUID));
-        assert!(metadata.contains("\"50\""));
+        assert!(metadata.contains("\"51\""));
+
+        let metadata: serde_json::Value = serde_json::from_str(&metadata).unwrap();
+        assert_eq!(metadata["uuid"], EXTENSION_UUID);
+        assert_eq!(
+            metadata["shell-version"],
+            serde_json::json!(["45", "46", "47", "48", "49", "50", "51"])
+        );
+        assert!(metadata["version"].as_u64().unwrap() >= 4);
 
         // Installing again is idempotent.
         install_to(&directory).unwrap();
