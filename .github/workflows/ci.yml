@@ -26,11 +26,6 @@ jobs:
       - name: Run Clippy
         working-directory: .
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
-      - name: Check generated Flatpak crate sources
-        working-directory: .
-        run: |
-          python3 scripts/generate-flatpak-cargo-sources.py
-          git diff --exit-code -- flatpak/cargo-sources.json
 
   extension:
     runs-on: ubuntu-latest
@@ -88,17 +83,4 @@ jobs:
         working-directory: .
         run: DIMMER_BIN=$PWD/target/release/dimmer gui-tests/run.sh
 
-  flatpak:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Flatpak Builder
-        run: sudo apt-get update && sudo apt-get install --yes flatpak flatpak-builder
-      - name: Configure Flathub
-        run: flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-      - name: Build the Flatpak
-        working-directory: .
-        run: >-
-          flatpak-builder --user --install-deps-from=flathub --force-clean
-          --repo=flatpak/repo flatpak/build flatpak/io.github.dimmer.Linux.yml
 

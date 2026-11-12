@@ -1,6 +1,7 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Download and install the latest native Dimmer release for the current user.
-set -euo pipefail
+# POSIX sh so the documented one-liner can pipe this into `sh`.
+set -eu
 
 REPOSITORY=realrnvr/dimmer
 ARCHIVE_NAME=dimmer-linux-x86_64.tar.gz
@@ -19,9 +20,7 @@ die() {
     exit 1
 }
 
-if [ -z "${HOME:-}" ]; then
-    die "HOME must be set to install Dimmer for the current user."
-fi
+[ -n "${HOME:-}" ] || die "HOME must be set to install Dimmer for the current user."
 command -v tar >/dev/null 2>&1 || die "tar is required to unpack the Dimmer release."
 command -v sha256sum >/dev/null 2>&1 || die "sha256sum is required to verify the Dimmer release."
 
@@ -38,32 +37,29 @@ temporary_directory=$(mktemp -d)
 trap 'rm -rf "$temporary_directory"' EXIT
 archive=$temporary_directory/$ARCHIVE_NAME
 checksum_file=$temporary_directory/SHA256SUMS
+checksum_entry=$temporary_directory/archive.sha256
 bundle=$temporary_directory/bundle
 
 download() {
-    local url=$1
-    local destination=$2
-
     if [ "$DOWNLOAD_TOOL" = curl ]; then
-        curl --fail --location --silent --show-error "$url" --output "$destination"
+        curl --fail --location --silent --show-error "$1" --output "$2"
     else
-        wget --quiet "$url" --output-document="$destination"
+        wget --quiet "$1" --output-document="$2"
     fi
 }
 
 download_with_spinner() {
-    local url=$1
-    local destination=$2
-    local frames=(. .. ...)
-    local frame_index=0
-    local download_pid
-    local status
-
-    download "$url" "$destination" &
+    download "$1" "$2" &
     download_pid=$!
+    frame=1
     while kill -0 "$download_pid" 2>/dev/null; do
-        printf '\r[INFO]: Downloading release archive %-3s' "${frames[$frame_index]}" >&2
-        frame_index=$(((frame_index + 1) % ${#frames[@]}))
+        case $frame in
+            1) dots='.' ;;
+            2) dots='..' ;;
+            *) dots='...' ;;
+        esac
+        printf '\r[INFO]: Downloading release archive %-3s' "$dots" >&2
+        frame=$((frame % 3 + 1))
         sleep 0.2
     done
 
@@ -88,9 +84,11 @@ fi
 log_info "Downloading release checksums."
 download "$RELEASE_BASE/SHA256SUMS" "$checksum_file" \
     || die "Could not download the Dimmer release checksum file."
+
 log_info "Verifying release archive checksum."
-grep -F "  $ARCHIVE_NAME" "$checksum_file" \
-    | (cd "$temporary_directory" && sha256sum --check --status -) \
+grep -F "  $ARCHIVE_NAME" "$checksum_file" > "$checksum_entry" \
+    || die "The release checksum file does not list $ARCHIVE_NAME."
+(cd "$temporary_directory" && sha256sum --check --status archive.sha256) \
     || die "The Dimmer release archive checksum did not match."
 
 log_info "Checking release archive contents."
@@ -103,10 +101,12 @@ while IFS= read -r path; do
             ;;
     esac
 done < "$temporary_directory/archive-files"
+
 mkdir -p "$bundle" || die "Could not create a temporary extraction directory."
 log_info "Extracting release archive."
 tar --no-same-owner --no-same-permissions -xzf "$archive" -C "$bundle" \
     || die "Could not extract the release archive."
+
 [ -x "$bundle/dimmer" ] || die "The release archive does not contain the Dimmer binary."
 [ -x "$bundle/scripts/install.sh" ] || die "The release archive does not contain the installer."
 [ -f "$bundle/data/io.github.dimmer.Linux.desktop" ] \

@@ -11,9 +11,9 @@ gnome-extensions info dimmer@dimmer.linux
 The Debug tab also shows whether the extension is connected, the monitor list, the
 settings path and the current settings JSON.
 
-Flatpak users can install or update the app and host extension from a source
-checkout with `scripts/install-flatpak.sh`. The app itself cannot write its
-extension into the host GNOME Shell directory.
+Flatpak is not supported. Install Dimmer from a GitHub release or build it from
+source; both paths install the application and its GNOME Shell extension for the
+current user.
 
 ## The extension is not loaded or not active
 
@@ -49,9 +49,8 @@ journalctl --user -b -o cat /usr/bin/gnome-shell | grep -iE 'dimmer|JS ERROR'
 
 Common causes:
 
-- The extension directory is missing files. For a native install, reinstall with
-  `dimmer --install-extension`; for Flatpak, use `scripts/install-flatpak.sh`.
-  Check that all eight files are present:
+- The extension directory is missing files. Reinstall with
+  `dimmer --install-extension`. Check that all eight files are present:
   `metadata.json`, `extension.js`, `dbusClient.js`, `indicator.js`,
   `overlayManager.js`, `overlayMath.js`, `windowReset.js`, `stylesheet.css`.
 - A stale copy exists in another XDG data directory. Check
@@ -183,10 +182,6 @@ cat ~/.config/autostart/io.github.dimmer.Linux.desktop
   window opens at login.
 - The desktop must be a GNOME/Wayland session and the binary must still exist.
 - Toggling the option off removes only Dimmer's own entry.
-
-The **Auto run** switch is unavailable in the Flatpak build because it cannot
-write to the host autostart directory. Use your desktop's startup application
-settings to add `flatpak run io.github.dimmer.Linux` instead.
 
 ## High CPU or memory
 

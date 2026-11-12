@@ -79,6 +79,30 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+die() {
+    echo "install.sh: $1" >&2
+    exit 1
+}
+
+require_command() {
+    command -v "$1" >/dev/null 2>&1 || die "$1 is required. Install it with your distribution's package manager."
+}
+
+if [ -z "$BINARY" ] && [ "$DO_BUILD" = 1 ]; then
+    require_command cargo
+    require_command rustc
+    require_command pkg-config
+
+    rust_version=$(rustc --version | awk '{print $2}')
+    if [ "$(printf '%s\n' 1.85 "$rust_version" | sort -V | head -n1)" != "1.85" ]; then
+        die "Rust 1.85 or newer is required (found $rust_version)."
+    fi
+    pkg-config --exists gtk4 || die "GTK 4 development files are required (gtk4 pkg-config module)."
+    pkg-config --atleast-version=4.12 gtk4 || die "GTK 4.12 or newer is required."
+    pkg-config --exists libadwaita-1 || die "libadwaita development files are required (libadwaita-1 pkg-config module)."
+    pkg-config --atleast-version=1.4 libadwaita-1 || die "libadwaita 1.4 or newer is required."
+fi
+
 if [ -z "$BINARY" ]; then
     if [ "$DO_BUILD" = 1 ]; then
         echo "Building Dimmer (release)…"

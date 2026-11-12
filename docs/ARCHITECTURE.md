@@ -212,10 +212,9 @@ Writes are atomic (temp file + rename). Malformed files are backed up to
 
 ## 7. Files installed
 
-`scripts/install.sh` builds and installs a native per-user copy under `$PREFIX`
-(default `~/.local`). `scripts/install-flatpak.sh` installs the Flathub app and
-the host extension for the current user; a Flatpak app cannot write the extension
-into the host GNOME Shell directory.
+`scripts/install.sh` builds and installs a per-user copy under `$PREFIX`
+(default `~/.local`). GitHub releases provide the same layout through a prebuilt
+binary and `scripts/install-release.sh`.
 The GNOME Shell extension is embedded in the binary; `dimmer --install-extension`
 writes it into the XDG data directory and is also called by the installer.
 

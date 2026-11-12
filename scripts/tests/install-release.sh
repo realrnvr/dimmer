@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 TEMP=$(mktemp -d)
@@ -13,12 +13,13 @@ mkdir -p "$FIXTURES/bundle/data/icons/hicolor/scalable/apps" \
 printf '#!/bin/sh\nexit 0\n' > "$FIXTURES/bundle/dimmer"
 chmod +x "$FIXTURES/bundle/dimmer"
 cp "$ROOT/scripts/install.sh" "$FIXTURES/bundle/scripts/install.sh"
+cp "$ROOT/LICENSE" "$FIXTURES/bundle/LICENSE"
 cp "$ROOT/data/io.github.dimmer.Linux.desktop" "$FIXTURES/bundle/data/"
 cp "$ROOT/data/io.github.dimmer.Linux.metainfo.xml" "$FIXTURES/bundle/data/"
 cp "$ROOT/data/icons/hicolor/scalable/apps/io.github.dimmer.Linux.svg" \
     "$FIXTURES/bundle/data/icons/hicolor/scalable/apps/"
 tar -C "$FIXTURES/bundle" -czf "$FIXTURES/dimmer-linux-x86_64.tar.gz" \
-    dimmer scripts data
+    LICENSE dimmer scripts data
 (cd "$FIXTURES" && sha256sum dimmer-linux-x86_64.tar.gz > SHA256SUMS)
 
 cat > "$MOCK_BIN/curl" <<'MOCK_CURL'
@@ -78,14 +79,14 @@ esac
 MOCK_WGET
 chmod +x "$WGET_BIN/wget"
 
-for tool in bash cp dirname env grep install mkdir mktemp pwd rm sed sha256sum sleep tar; do
+for tool in bash cat cp dirname env grep install mkdir mktemp pwd rm sed sha256sum sleep tar; do
     ln -s "$(command -v "$tool")" "$WGET_BIN/$tool"
 done
 
 export INSTALL_TEST_FIXTURES=$FIXTURES
 export PATH=$MOCK_BIN:$PATH
 
-bash "$ROOT/scripts/install-github.sh" --prefix "$TEMP/prefix" --no-enable \
+sh "$ROOT/scripts/install-release.sh" --prefix "$TEMP/prefix" --no-enable \
     > "$TEMP/non-tty.log" 2>&1
 grep -F '[INFO]:' "$TEMP/non-tty.log" >/dev/null
 ! grep -F '[ERROR]:' "$TEMP/non-tty.log" >/dev/null
@@ -104,7 +105,7 @@ PY
 if command -v script >/dev/null 2>&1; then
     INSTALL_TEST_DELAY_ARCHIVE=yes
     export INSTALL_TEST_DELAY_ARCHIVE
-    script -qec "bash '$ROOT/scripts/install-github.sh' --prefix '$TEMP/tty-prefix' --no-enable" \
+    script -qec "sh '$ROOT/scripts/install-release.sh' --prefix '$TEMP/tty-prefix' --no-enable" \
         /dev/null > "$TEMP/tty.log" 2>&1
     python3 - "$TEMP/tty.log" <<'PY'
 import pathlib
@@ -117,9 +118,9 @@ assert frames[:4] == [b".", b"..", b"...", b"."], frames
 assert b"[INFO]: Download complete." in output
 PY
 
-    bash_bin=$(command -v bash)
+    sh_bin=$(command -v sh)
     script_bin=$(command -v script)
-    "$script_bin" -qec "PATH='$WGET_BIN' '$bash_bin' '$ROOT/scripts/install-github.sh' --prefix '$TEMP/wget-prefix' --no-enable" \
+    "$script_bin" -qec "PATH='$WGET_BIN' '$sh_bin' '$ROOT/scripts/install-release.sh' --prefix '$TEMP/wget-prefix' --no-enable" \
         /dev/null > "$TEMP/wget-tty.log" 2>&1
     python3 - "$TEMP/wget-tty.log" <<'PY'
 import pathlib
@@ -135,7 +136,7 @@ PY
 fi
 
 printf '%064d  dimmer-linux-x86_64.tar.gz\n' 0 > "$FIXTURES/SHA256SUMS"
-if bash "$ROOT/scripts/install-github.sh" --prefix "$TEMP/rejected" >"$TEMP/output" 2>&1; then
+if sh "$ROOT/scripts/install-release.sh" --prefix "$TEMP/rejected" >"$TEMP/output" 2>&1; then
     echo 'Installer accepted an archive with an invalid checksum.' >&2
     exit 1
 fi
@@ -147,10 +148,10 @@ grep -F '[ERROR]:' "$TEMP/output" >/dev/null
 
 INSTALL_TEST_FAIL_DOWNLOAD=archive
 export INSTALL_TEST_FAIL_DOWNLOAD
-if bash "$ROOT/scripts/install-github.sh" --prefix "$TEMP/download-failed" >"$TEMP/output" 2>&1; then
+if sh "$ROOT/scripts/install-release.sh" --prefix "$TEMP/download-failed" >"$TEMP/output" 2>&1; then
     echo 'Installer accepted a failed archive download.' >&2
     exit 1
 fi
 grep -F '[ERROR]: Could not download the Dimmer release archive.' "$TEMP/output" >/dev/null
 
-echo 'GitHub installer checks passed.'
+echo 'Release installer checks passed.'

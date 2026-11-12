@@ -48,13 +48,6 @@ fn main() -> glib::ExitCode {
         return glib::ExitCode::SUCCESS;
     }
     if options.install_extension {
-        if std::env::var_os("FLATPAK_ID").is_some() {
-            eprintln!("dimmer: a Flatpak cannot install the GNOME extension into the host.");
-            eprintln!(
-                "Run scripts/install-flatpak.sh from the Dimmer source checkout, or install the extension ZIP from the GitHub release on the host."
-            );
-            return glib::ExitCode::FAILURE;
-        }
         return match extension::install() {
             Ok(directory) => {
                 println!("{}", extension::instructions(&directory));

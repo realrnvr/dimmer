@@ -123,34 +123,23 @@ impl SharedState {
             if loaded.settings.screens.is_empty() { "empty" } else { "loaded" }
         ));
 
-        let is_flatpak = std::env::var_os("FLATPAK_ID").is_some();
-        let auto_run_dir = if is_flatpak {
-            None
-        } else {
-            autostart::autostart_dir(
-                env_path("XDG_CONFIG_HOME").as_deref(),
-                env_path("HOME").as_deref(),
-            )
-        };
+        let auto_run_dir = autostart::autostart_dir(
+            env_path("XDG_CONFIG_HOME").as_deref(),
+            env_path("HOME").as_deref(),
+        );
         let mut settings = loaded.settings;
-        if !is_flatpak {
-            if let Some(directory) = &auto_run_dir {
-                let present = autostart::is_enabled(directory);
-                if settings.auto_run.on != present {
-                    log.info(format!(
-                        "autostart entry {} (reconciled)",
-                        if present { "present" } else { "missing" }
-                    ));
-                    settings.auto_run.on = present;
-                }
+        if let Some(directory) = &auto_run_dir {
+            let present = autostart::is_enabled(directory);
+            if settings.auto_run.on != present {
+                log.info(format!(
+                    "autostart entry {} (reconciled)",
+                    if present { "present" } else { "missing" }
+                ));
+                settings.auto_run.on = present;
             }
         }
 
-        let extension_data_home = if is_flatpak {
-            env_path("HOST_XDG_DATA_HOME").or_else(|| env_path("XDG_DATA_HOME"))
-        } else {
-            env_path("XDG_DATA_HOME")
-        };
+        let extension_data_home = env_path("XDG_DATA_HOME");
         let extension_dir =
             extension_directory(extension_data_home.as_deref(), env_path("HOME").as_deref());
 
@@ -576,12 +565,6 @@ impl SharedState {
     ///
     /// Returns an error when the autostart entry cannot be written.
     pub fn set_autostart(&self, enabled: bool) -> Result<(), String> {
-        if std::env::var_os("FLATPAK_ID").is_some() {
-            return Err(
-                "Autostart is not available in the Flatpak build. Use your desktop's startup applications settings instead."
-                    .to_owned(),
-            );
-        }
         self.write_autostart_entry(enabled)?;
         self.ui_mutate(|settings| settings.auto_run.on = enabled);
         self.save()?;

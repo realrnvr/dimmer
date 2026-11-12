@@ -26,7 +26,6 @@ pub struct OptionsPage {
     rows: Rows,
     guard: Rc<Cell<bool>>,
     movable: Rc<Cell<bool>>,
-    flatpak: bool,
 }
 
 impl OptionsPage {
@@ -62,13 +61,6 @@ impl OptionsPage {
         startup
             .set_description(Some("Autostart uses an XDG desktop entry and needs no root access."));
         let auto_run = switch_row("Auto run", "Start Dimmer automatically after you log in.");
-        let is_flatpak = std::env::var_os("FLATPAK_ID").is_some();
-        if is_flatpak {
-            auto_run.set_subtitle(
-                "Not available in Flatpak. Use your desktop's startup applications settings instead.",
-            );
-            auto_run.set_sensitive(false);
-        }
         let start_minimised =
             switch_row("Start minimised", "Start hidden in the background with dimming active.");
         startup.add(&auto_run);
@@ -166,7 +158,7 @@ impl OptionsPage {
             reset.connect_clicked(move |_| reset_window());
         }
 
-        Self { page, rows, guard, movable, flatpak: is_flatpak }
+        Self { page, rows, guard, movable }
     }
 
     #[must_use]
@@ -179,7 +171,7 @@ impl OptionsPage {
         self.rows.show_ids.set_active(snapshot.settings.show_ids);
         self.rows.show_boundaries.set_active(snapshot.settings.show_boundaries);
         self.rows.non_dimmable.set_active(snapshot.settings.non_dimmable_window);
-        self.rows.auto_run.set_active(!self.flatpak && snapshot.settings.auto_run.on);
+        self.rows.auto_run.set_active(snapshot.settings.auto_run.on);
         self.rows.start_minimised.set_active(snapshot.settings.start_minimised);
         self.rows.movable.set_active(snapshot.settings.movable_window);
         self.rows.close_hides.set_active(snapshot.settings.close_hides_to_tray);

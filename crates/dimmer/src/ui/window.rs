@@ -483,11 +483,8 @@ fn update_banner(shared: &SharedState, banner: &adw::Banner, window: &adw::Appli
 
 fn extension_help(shared: &SharedState, window: &adw::ApplicationWindow) {
     let snapshot = shared.snapshot();
-    let is_flatpak = std::env::var_os("FLATPAK_ID").is_some();
     let body = if snapshot.extension_installed {
         "GNOME Shell loads newly installed extensions only at login. Log out, log back in, then open Dimmer. If it is still not connected, check the Extensions app and make sure \"Dimmer\" is enabled.\n\nOn Wayland, a normal application cannot draw over other apps, so the extension is required."
-    } else if is_flatpak {
-        "The GNOME Shell extension must be installed on the host because Flatpak apps cannot write to the host extension directory. From the Dimmer source checkout, run:\n\n    ./scripts/install-flatpak.sh\n\nOr download the extension ZIP from https://github.com/realrnvr/dimmer/releases and install it on the host. Then log out and back in and enable \"Dimmer\" in the Extensions app.\n\nOn Wayland, a normal application cannot draw over other apps, so the extension is required."
     } else {
         "Install the bundled GNOME Shell extension with:\n\n    dimmer --install-extension\n\n(If you are running from the source tree, scripts/install.sh also installs the application and extension.) Then log out and back in. The extension lives in ~/.local/share/gnome-shell/extensions/dimmer@dimmer.linux.\n\nOn Wayland, a normal application cannot draw over other apps, so the extension is required."
     };
