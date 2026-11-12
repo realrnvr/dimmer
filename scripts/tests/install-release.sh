@@ -79,8 +79,11 @@ esac
 MOCK_WGET
 chmod +x "$WGET_BIN/wget"
 
-for tool in bash cat cp dirname env grep install mkdir mktemp pwd rm sed sha256sum sleep tar; do
-    ln -s "$(command -v "$tool")" "$WGET_BIN/$tool"
+for tool in bash cat cp dirname env grep gzip install mkdir mktemp rm sed sha256sum sleep tar; do
+    resolved=$(command -v "$tool")
+    case "$resolved" in
+        /*) ln -s "$resolved" "$WGET_BIN/$tool" ;;
+    esac
 done
 
 export INSTALL_TEST_FIXTURES=$FIXTURES

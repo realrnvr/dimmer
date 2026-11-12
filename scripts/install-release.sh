@@ -22,6 +22,7 @@ die() {
 
 [ -n "${HOME:-}" ] || die "HOME must be set to install Dimmer for the current user."
 command -v tar >/dev/null 2>&1 || die "tar is required to unpack the Dimmer release."
+command -v gzip >/dev/null 2>&1 || die "gzip is required to unpack the Dimmer release."
 command -v sha256sum >/dev/null 2>&1 || die "sha256sum is required to verify the Dimmer release."
 
 if command -v curl >/dev/null 2>&1; then
