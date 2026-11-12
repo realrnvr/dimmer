@@ -41,7 +41,7 @@ alternative.
 ### GitHub release (recommended)
 
 ```bash
-curl --proto '=https' --tlsv1.2 -sSf https://github.com/realrnvr/dimmer/releases/latest/download/install.sh | sh
+curl --proto '=https' --tlsv1.2 -sSfL https://github.com/realrnvr/dimmer/releases/latest/download/install.sh | sh
 ```
 
 The installer downloads the release archive, verifies its SHA-256 checksum,
@@ -60,7 +60,7 @@ sh install.sh
 Installer options are passed after `sh -s --`:
 
 ```bash
-curl --proto '=https' --tlsv1.2 -sSf \
+curl --proto '=https' --tlsv1.2 -sSfL \
   https://github.com/realrnvr/dimmer/releases/latest/download/install.sh \
   | sh -s -- --prefix "$HOME/.local"
 ```
