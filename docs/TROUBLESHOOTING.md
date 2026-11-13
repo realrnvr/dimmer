@@ -35,7 +35,7 @@ though the extension still reports `ACTIVE`. The Shell only notices a different
 already-loaded extension, log out and back in (or reboot), then check:
 
 ```bash
-gnome-extensions info dimmer@dimmer.linux   # Version: 4
+gnome-extensions info dimmer@dimmer.linux   # Version: 5
 ```
 
 The app's Debug tab also shows the connected extension version. If it still
@@ -50,9 +50,10 @@ journalctl --user -b -o cat /usr/bin/gnome-shell | grep -iE 'dimmer|JS ERROR'
 Common causes:
 
 - The extension directory is missing files. Reinstall with
-  `dimmer --install-extension`. Check that all eight files are present:
+  `dimmer --install-extension`. Check that all eleven files are present:
   `metadata.json`, `extension.js`, `dbusClient.js`, `indicator.js`,
-  `overlayManager.js`, `overlayMath.js`, `windowReset.js`, `stylesheet.css`.
+  `overlayManager.js`, `overlayMath.js`, `windowReset.js`, `stylesheet.css`,
+  `adaptiveCapture.js`, `adaptiveController.js`, `adaptiveMath.js`.
 - A stale copy exists in another XDG data directory. Check
   `$XDG_DATA_HOME/gnome-shell/extensions/dimmer@dimmer.linux` and
   `~/.local/share/gnome-shell/extensions/dimmer@dimmer.linux`.
@@ -87,6 +88,46 @@ Common causes:
 
 4. If `extension_connected` is false, the extension never reached the service.
    Restart both sides: `dimmer --quit && dimmer`.
+
+## Adaptive dimming does nothing
+
+Adaptive mode only adds darkness above two brightness ceilings, so it is
+supposed to stay invisible on ordinary dark or mid-tone content. Check these
+before suspecting a bug:
+
+1. Adaptive is on in **Options → Adaptive**, and the screen is on with a dim
+   above 0. The feature is inactive at 0% dim (there is no dim layer to build
+   on) and at 90% dim (no headroom).
+2. The content is actually bright. At strength 50 nothing below 62% peak
+   brightness reacts, and at 30% user dim a 50% grey page is already at the 35%
+   average ceiling. Pure white is the reliable test.
+3. The overview, lock screen, a Shell dialog or an open panel menu pauses the
+   layer on purpose.
+4. The Debug tab must show moving peak/average values and a `+N%`. “Waiting for
+   the extension” means the extension has not connected; “unavailable” means
+   this Shell cannot capture the screen, and the reason is in the journal.
+
+Use the manual test page to produce genuinely white content:
+
+```bash
+# open this in a browser on the monitor under test, then fullscreen it
+xdg-open "$PWD/gnome-extension/tests/adaptive-flash.html"
+
+# in another terminal, watch what the extension measures
+gjs -m gnome-extension/tests/adaptive-watch.js
+```
+
+Recommended baseline: one monitor, screen dim **10%**, adaptive on, strength
+**50**. Hide the Dimmer window first (`HideWindow` in the indicator) or move it
+to another monitor, and make the page fullscreen; its HUD shows the mode and a
+model prediction. Add `&hud=0` to the URL for calibration runs, and use
+`?mode=area` to sweep white areas from 0 to 100%.
+
+At that baseline, expected extra darkness is: pure white 50% (the cap), 71%
+grey 45%, 50% grey 22%, black 0. The watcher prints the measured peak/mean, the
+reported alpha and the alpha implied by the control law; a persistent
+difference between the last two is a controller bug, while a correct alpha with
+no visible change points at rendering.
 
 ## Only one monitor is available
 

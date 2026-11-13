@@ -186,26 +186,32 @@ undoes your chosen dim.
   from 72%/42% to 52%/28% brightness, and the smallest extra darkness that meets
   both is applied. Darkness is added at up to 0.8 alpha/s and released at 0.1
   alpha/s, so a passing bright window does not flash.
-- Each monitor is measured and controlled independently. At 90% user dim there is
-  no headroom left, so adaptive mode stays off.
+- Each monitor is measured and controlled independently. Adaptive is inactive at
+  0% screen dim (there is no dim layer to build on) and at 90% (no headroom
+  left).
 - It pauses behind the overview, the lock screen, Shell dialogs and open menus,
   and resumes when they close.
 
-The table is the exact result for uniformly bright content at the default
-strength (50) with no user dim. `A` is the fraction of the dimmed area that is
-white.
+The table is the response for uniformly bright content with the default strength
+(50) and the screen dim at 10%, rounded to 1%. `A` is the fraction of the
+measured (dimmed) area that is white. At 0% screen dim adaptive is inactive, and
+higher dim levels leave less headroom and react later.
 
 | White area `A` | Extra darkness |
 |---|---|
-| 0–12.4% | 0 |
-| 15% | 17% |
-| 20–50% | 38% |
-| 60% | 42% |
-| 80–100% | 50% (cap) |
+| 0–14% | 0 |
+| 15% | 9% |
+| 20–56% | 32% |
+| 60% | 36% |
+| 70% | 45% |
+| 77–100% | 50% (cap) |
 
 "Deterministic" describes the software response, not a promise of comfort:
 ambient light, monitor gamma and individual sensitivity are outside what the
-extension can measure. Use Strength to taste.
+extension can measure. Use Strength to taste. To see the response at 10% dim,
+open `gnome-extension/tests/adaptive-flash.html` fullscreen and watch
+`gjs -m gnome-extension/tests/adaptive-watch.js`; see
+[TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
 ### Options
 

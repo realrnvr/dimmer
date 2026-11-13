@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dimmer adaptive test</title>
+<style>
+  :root { color-scheme: light; }
+  html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+  }
+  #stage {
+      position: fixed;
+      inset: 0;
+      background: #000;
+  }
+  #band {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: #fff;
+      display: none;
+  }
+  #hud {
+      position: fixed;
+      left: 12px;
+      bottom: 12px;
+      z-index: 10;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: rgba(255, 255, 64, 0.92);
+      color: #000;
+      font: 13px/1.45 ui-monospace, monospace;
+      white-space: pre;
+      pointer-events: none;
+  }
+  #hud.hidden { display: none; }
+  #start {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.88);
+      color: #fff;
+      font: 16px/1.6 system-ui, sans-serif;
+      cursor: pointer;
+  }
+  #start.hidden { display: none; }
+  #start .box {
+      max-width: 44rem;
+      padding: 2rem;
+  }
+  #start h1 {
+      font-size: 1.35rem;
+      margin: 0 0 1rem;
+  }
+  #start p {
+      margin: 0.45rem 0;
+      color: #ddd;
+  }
+  #start .warn { color: #ffd166; }
+  #start code, #start kbd {
+      background: #fff;
+      color: #000;
+      padding: 0.1em 0.35em;
+      border-radius: 4px;
+      font-size: 0.9em;
+  }
+</style>
+</head>
+<body>
+<div id="stage"><div id="band"></div></div>
+<div id="hud" class="hidden"></div>
+<div id="start">
+  <div class="box">
+    <h1>Dimmer adaptive test page</h1>
+    <p><b>Click anywhere</b> or press <kbd>F</kbd> to go fullscreen.
+       Measurements are only meaningful in fullscreen.</p>
+    <p>Recommended baseline: one monitor, screen dim <b>10%</b>, adaptive on,
+       strength <b>50</b>. Hide the Dimmer window first, or move it to another
+       monitor.</p>
+    <p>Default mode <code>cycle</code>: white 4 s, 50% grey 5 s, black 6 s.
+       <kbd>Space</kbd> pauses, <kbd>H</kbd> hides the HUD, <kbd>1</kbd>-<kbd>4</kbd>
+       force a solid colour, <kbd>[</kbd> / <kbd>]</kbd> change the white area.</p>
+    <p>Other modes: <code>?mode=area</code> (white-area sweep),
+       <code>?mode=solid&amp;color=%23ffffff</code>,
+       <code>?mode=manual</code>. Add <code>&amp;hud=0</code> for calibration
+       runs. <code>?dim=NN</code> only changes the on-screen model, not Dimmer.</p>
+    <p>Watch it with the Dimmer Debug tab or
+       <code>gjs -m gnome-extension/tests/adaptive-watch.js</code>.</p>
+    <p class="warn">The page switches brightness abruptly. Skip it if flashing
+       content is a problem for you.</p>
+  </div>
+</div>
+<script>
+'use strict';
+
+const params = new URLSearchParams(location.search);
+const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+const number = (value, fallback) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const mode = (params.get('mode') || 'cycle').toLowerCase();
+const skipStart = params.get('start') === '0';
+const dim = clamp(number(params.get('dim'), 10), 0, 90);
+const strength = clamp(number(params.get('strength'), 50), 0, 100);
+const dwell = params.has('dwell') ? clamp(number(params.get('dwell'), 4), 0.5, 120) : null;
+const stepSeconds = clamp(number(params.get('step'), 6), 0.5, 120);
+
+const WHITE = '#ffffff';
+const GREY = '#808080';
+const GREY71 = '#b4b4b4';
+const BLACK = '#000000';
+
+const stage = document.getElementById('stage');
+const band = document.getElementById('band');
+const hud = document.getElementById('hud');
+const start = document.getElementById('start');
+
+let showHud = params.get('hud') !== '0';
+let timeline = [];
+let index = 0;
+let paused = false;
+let pausedAt = 0;
+let pausedMs = 0;
+let phaseStart = 0;
+let manual = false;
+let manualStep = {kind: 'solid', color: WHITE, label: 'white'};
+let lastArea = 10;
+let wakeLock = null;
+
+function solid(color, label, duration = Infinity) {
+    return {kind: 'solid', color, label, duration};
+}
+
+function area(value, duration = Infinity) {
+    return {kind: 'area', area: value, label: `${value}% white`, duration};
+}
+
+function buildTimeline() {
+    manual = false;
+    paused = false;
+    pausedMs = 0;
+
+    if (mode === 'solid') {
+        const color = params.get('color') || WHITE;
+        timeline = [solid(color, color)];
+        return;
+    }
+
+    if (mode === 'area') {
+        if (params.has('area')) {
+            lastArea = clamp(number(params.get('area'), 20), 0, 100);
+            timeline = [area(lastArea)];
+            return;
+        }
+        lastArea = 10;
+        timeline = [0, 5, 10, 12.4, 15, 20, 40, 60, 80, 100]
+            .map(value => area(value, stepSeconds));
+        return;
+    }
+
+    if (mode === 'manual') {
+        manual = true;
+        manualStep = solid(WHITE, 'white');
+        return;
+    }
+
+    const white = dwell ?? 4;
+    const grey = dwell ?? 5;
+    const black = dwell ?? 6;
+    timeline = [
+        solid(WHITE, 'white', white),
+        solid(GREY, '50% grey', grey),
+        solid(BLACK, 'black', black),
+    ];
+}
+
+function currentStep() {
+    return manual ? manualStep : timeline[index];
+}
+
+function applyStep(step) {
+    if (!step)
+        return;
+
+    if (step.kind === 'area') {
+        stage.style.background = BLACK;
+        band.style.display = 'block';
+        band.style.height = `${step.area}%`;
+        band.style.top = `${(100 - step.area) / 2}%`;
+    } else {
+        band.style.display = 'none';
+        stage.style.background = step.color;
+    }
+}
+
+function luma(color) {
+    const match = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(String(color).trim());
+    if (!match)
+        return 0;
+    let value = match[1];
+    if (value.length === 3)
+        value = value.split('').map(character => character + character).join('');
+    const packed = Number.parseInt(value, 16);
+    return 0.2126 * ((packed >> 16) & 0xff) / 255 +
+        0.7152 * ((packed >> 8) & 0xff) / 255 +
+        0.0722 * (packed & 0xff) / 255;
+}
+
+// Mirrors adaptiveMath.js so the HUD shows the same number Dimmer should apply.
+// It is a model only: the authoritative value is in GetAdaptiveMetrics.
+function modelAlpha(step) {
+    const scale = 1 - dim / 100;
+    let high;
+    let mean;
+    if (step.kind === 'area') {
+        const fraction = clamp(step.area, 0, 100) / 100;
+        high = Math.min(1, fraction / 0.20) * scale;
+        mean = fraction * scale;
+    } else {
+        high = mean = luma(step.color) * scale;
+    }
+
+    const s = strength / 100;
+    const highTarget = 0.72 - 0.20 * s;
+    const meanTarget = 0.42 - 0.14 * s;
+    const headroom = Math.max(0, Math.min(0.50, 0.90 - dim / 100));
+    if (!(high > 0) || !(mean > 0) || headroom <= 0)
+        return 0;
+
+    const needHigh = high > highTarget ? 1 - highTarget / high : 0;
+    const needMean = mean > meanTarget ? 1 - meanTarget / mean : 0;
+    return clamp(Math.max(needHigh, needMean), 0, headroom);
+}
+
+function updateHud(now) {
+    if (!showHud) {
+        hud.classList.add('hidden');
+        return;
+    }
+    hud.classList.remove('hidden');
+
+    const step = currentStep();
+    if (!step)
+        return;
+
+    let remaining = '';
+    if (!manual && timeline.length > 1 && Number.isFinite(step.duration)) {
+        const left = Math.max(0, step.duration - (now - phaseStart - pausedMs) / 1000);
+        remaining = `  ${left.toFixed(1)} s left`;
+    }
+
+    const fullscreen = document.fullscreenElement ? '' : '  [NOT FULLSCREEN]';
+    const percent = Math.round(modelAlpha(step) * 100);
+    const offAtZero = dim <= 0 ? '\napp disables adaptive at 0% dim' : '';
+
+    hud.textContent =
+        `${mode}${paused ? ' (paused)' : ''} - ${step.label}${remaining}${fullscreen}\n` +
+        `model @ dim ${dim}% strength ${strength}: +${percent}%${offAtZero}\n` +
+        'H HUD - Space pause - F fullscreen - 1/2/3/4 solids - [ ] area - R restart';
+}
+
+function tick(now) {
+    if (phaseStart === 0)
+        phaseStart = now;
+
+    if (!manual && timeline.length > 1) {
+        const step = timeline[index];
+        const duration = step.duration ?? Infinity;
+        if (!paused && Number.isFinite(duration) &&
+            now - phaseStart - pausedMs >= duration * 1000) {
+            index = (index + 1) % timeline.length;
+            phaseStart = now;
+            pausedMs = 0;
+        }
+    }
+
+    applyStep(currentStep());
+    updateHud(now);
+    requestAnimationFrame(tick);
+}
+
+function togglePause(now) {
+    if (manual)
+        return;
+    if (paused) {
+        pausedMs += now - pausedAt;
+        paused = false;
+    } else {
+        paused = true;
+        pausedAt = now;
+    }
+}
+
+function enterManual(step) {
+    manual = true;
+    paused = false;
+    manualStep = step;
+}
+
+async function requestWakeLock() {
+    try {
+        wakeLock = await navigator.wakeLock?.request('screen');
+    } catch (_error) {
+        // Wake lock is a convenience; its absence does not matter.
+    }
+}
+
+function fullscreen() {
+    if (!document.fullscreenElement)
+        document.documentElement.requestFullscreen?.().catch(() => {});
+}
+
+function begin() {
+    start.classList.add('hidden');
+    showHud = params.get('hud') !== '0';
+    fullscreen();
+    requestWakeLock();
+}
+
+start.addEventListener('click', begin);
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && start.classList.contains('hidden'))
+        requestWakeLock();
+});
+
+document.addEventListener('keydown', event => {
+    const key = event.key;
+
+    if (key === 'f' || key === 'F') {
+        if (!start.classList.contains('hidden'))
+            begin();
+        else if (document.fullscreenElement)
+            document.exitFullscreen?.();
+        else
+            fullscreen();
+        event.preventDefault();
+        return;
+    }
+
+    if (!start.classList.contains('hidden'))
+        return;
+
+    if (key === ' ') {
+        togglePause(performance.now());
+        event.preventDefault();
+    } else if (key === 'h' || key === 'H') {
+        showHud = !showHud;
+    } else if (key === 'r' || key === 'R') {
+        buildTimeline();
+        index = 0;
+        phaseStart = performance.now();
+        applyStep(currentStep());
+    } else if (key === '1') {
+        enterManual(solid(WHITE, 'white'));
+    } else if (key === '2') {
+        enterManual(solid(GREY, '50% grey'));
+    } else if (key === '3') {
+        enterManual(solid(BLACK, 'black'));
+    } else if (key === '4') {
+        enterManual(solid(GREY71, '71% grey'));
+    } else if (key === '[' || key === ']') {
+        const step = currentStep();
+        const base = step?.kind === 'area' ? step.area : lastArea;
+        lastArea = clamp(base + (key === ']' ? 1 : -1), 0, 100);
+        enterManual(area(lastArea));
+    }
+});
+
+buildTimeline();
+applyStep(currentStep());
+phaseStart = performance.now();
+if (skipStart) {
+    start.classList.add('hidden');
+    requestWakeLock();
+}
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
