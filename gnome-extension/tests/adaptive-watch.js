@@ -5,9 +5,12 @@
 //
 // Prints one line per sample with the measured peak/average, the alpha the
 // extension says it applies, and the alpha implied by the same control law.
-// Agreement means capture and control are fine; a persistent difference is a
-// controller bug. It does not prove the layer rendered — use the screenshot
-// check in docs/TEST_PLAN.md for that.
+// Once the layer has settled, agreement means capture and control are fine; a
+// persistent difference is a controller bug.  Alpha is allowed to lag the
+// implied value while attack (0.8/s) or release (0.1/s) is in progress, so
+// mismatch is only judged between samples where alpha has stopped moving.  It
+// does not prove the layer rendered — use the screenshot check in
+// docs/TEST_PLAN.md for that.
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -27,7 +30,7 @@ function usage() {
 Polls io.github.dimmer.Linux.GetAdaptiveMetrics and prints a table.
 
 Options:
-  --interval=MS    Sampling interval in milliseconds (default 500)
+  --interval=MS    Sampling interval in milliseconds (default 500, min 250)
   --duration=SEC   Stop after this many seconds (default: run until Ctrl-C)
   --csv=FILE       Write raw samples to FILE when the watcher stops
   --help, -h       Show this help
@@ -45,7 +48,7 @@ for (const argument of ARGV) {
         usage();
         System.exit(0);
     } else if (argument.startsWith('--interval=')) {
-        intervalMs = Math.max(100, Number(argument.slice('--interval='.length)) || 500);
+        intervalMs = Math.max(250, Number(argument.slice('--interval='.length)) || 500);
     } else if (argument.startsWith('--duration=')) {
         durationS = Math.max(0, Number(argument.slice('--duration='.length)) || 0);
     } else if (argument.startsWith('--csv=')) {
@@ -104,6 +107,7 @@ let toldMetricsMissing = false;
 let toldNoScreens = false;
 let toldAdaptiveOff = false;
 const streaks = new Map();
+const lastAlpha = new Map();
 const csv = ['time,screen,dim,high,mean,alpha,implied,paused,available,sample_ms'];
 
 function finish() {
@@ -189,7 +193,11 @@ function poll() {
         if (!metrics.available)
             flags.push('unavailable');
 
-        if (!metrics.paused && implied !== null) {
+        const previous = lastAlpha.get(screen.id);
+        lastAlpha.set(screen.id, screen.alpha);
+        const moving = previous !== undefined && Math.abs(screen.alpha - previous) > 0.002;
+
+        if (!metrics.paused && implied !== null && !moving) {
             const delta = Math.abs(screen.alpha - implied);
             const streak = delta > MISMATCH ? (streaks.get(screen.id) ?? 0) + 1 : 0;
             streaks.set(screen.id, streak);
