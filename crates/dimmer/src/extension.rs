@@ -14,6 +14,18 @@ use crate::shared::{EXTENSION_UUID, extension_directory};
 ///
 /// Keep this list in sync with `gnome-extension/dimmer@dimmer.linux/`.
 const FILES: &[(&str, &str)] = &[
+    (
+        "adaptiveCapture.js",
+        include_str!("../../../gnome-extension/dimmer@dimmer.linux/adaptiveCapture.js"),
+    ),
+    (
+        "adaptiveController.js",
+        include_str!("../../../gnome-extension/dimmer@dimmer.linux/adaptiveController.js"),
+    ),
+    (
+        "adaptiveMath.js",
+        include_str!("../../../gnome-extension/dimmer@dimmer.linux/adaptiveMath.js"),
+    ),
     ("metadata.json", include_str!("../../../gnome-extension/dimmer@dimmer.linux/metadata.json")),
     ("extension.js", include_str!("../../../gnome-extension/dimmer@dimmer.linux/extension.js")),
     ("dbusClient.js", include_str!("../../../gnome-extension/dimmer@dimmer.linux/dbusClient.js")),
@@ -117,6 +129,26 @@ mod tests {
         assert_eq!(fs::read_dir(&directory).unwrap().count(), FILES.len());
 
         fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn embedded_list_matches_the_extension_sources() {
+        let source =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../gnome-extension/dimmer@dimmer.linux");
+
+        let mut expected: Vec<String> = fs::read_dir(&source)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .filter(|name| {
+                ["js", "css", "json"].contains(&name.rsplit('.').next().unwrap_or_default())
+            })
+            .collect();
+        expected.sort();
+
+        let mut embedded: Vec<String> = FILES.iter().map(|(name, _)| (*name).to_owned()).collect();
+        embedded.sort();
+
+        assert_eq!(embedded, expected, "extension.rs FILES is out of sync with gnome-extension/");
     }
 
     #[test]
