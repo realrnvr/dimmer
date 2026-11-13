@@ -91,6 +91,26 @@ export const DimmerDbusClient = GObject.registerClass({
         this._call('ResetWindowPosition');
     }
 
+    /**
+     * Publish adaptive measurements to the application, such as the measured
+     * brightness and the alpha in force.  Purely informational: failures are
+     * quiet, because an older application simply will not implement this.
+     *
+     * @param {object} payload
+     */
+    reportAdaptiveMetrics(payload) {
+        if (this._destroyed || !this._connected)
+            return;
+
+        let json;
+        try {
+            json = JSON.stringify(payload);
+        } catch (_error) {
+            return;
+        }
+        this._call('ReportAdaptiveMetrics', new GLib.Variant('(s)', [json]), null, true);
+    }
+
     windowResetCompleted(serial, success) {
         this._call('WindowResetCompleted',
             new GLib.Variant('(sb)', [String(serial), Boolean(success)]));
@@ -300,7 +320,7 @@ export const DimmerDbusClient = GObject.registerClass({
         }
     }
 
-    _call(method, parameters = null, callback = null) {
+    _call(method, parameters = null, callback = null, quiet = false) {
         if (this._destroyed || !this._bus)
             return;
 
@@ -324,7 +344,8 @@ export const DimmerDbusClient = GObject.registerClass({
                 } catch (error) {
                     if (error.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
                         return;
-                    debug(`${method} failed: ${error.message}`);
+                    if (!quiet)
+                        debug(`${method} failed: ${error.message}`);
                     callback?.(null);
                 }
             });

@@ -34,6 +34,21 @@ export function overlayColor(tint, dim) {
 }
 
 /**
+ * CSS colour for the adaptive layer: pure black, so that the composited output
+ * is exactly `in * (1 - alpha)` and the controller can invert it.
+ *
+ * The alpha is quantised to 8 bits (the precision St actually renders) so the
+ * value used to draw is the value used to invert.
+ *
+ * @param {number} alpha
+ * @returns {string}
+ */
+export function adaptiveColor(alpha) {
+    const value = Math.max(0, Math.min(255, Math.round((Number(alpha) || 0) * 255)));
+    return `rgba(0, 0, 0, ${(value / 255).toFixed(4)})`;
+}
+
+/**
  * Intersect two rectangles, returning null when they do not overlap.
  *
  * @param {{x: number, y: number, width: number, height: number}} a

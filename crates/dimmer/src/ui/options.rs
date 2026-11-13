@@ -13,6 +13,8 @@ struct Rows {
     show_ids: adw::SwitchRow,
     show_boundaries: adw::SwitchRow,
     non_dimmable: adw::SwitchRow,
+    adaptive_on: adw::SwitchRow,
+    adaptive_strength: adw::SpinRow,
     auto_run: adw::SwitchRow,
     start_minimised: adw::SwitchRow,
     movable: adw::SwitchRow,
@@ -54,6 +56,24 @@ impl OptionsPage {
         display.add(&show_ids);
         display.add(&show_boundaries);
         display.add(&non_dimmable);
+
+        let adaptive = adw::PreferencesGroup::new();
+        adaptive.set_title("Adaptive");
+        name_group_list(&adaptive, "Adaptive");
+        adaptive.set_description(Some(
+            "Darkens further when the screen content is bright. Read locally four times a \
+             second; nothing is recorded or sent anywhere.",
+        ));
+        let adaptive_on = switch_row(
+            "Adaptive dimming",
+            "Adds darkness on bright content. Only ever darkens, and never past 90% total.",
+        );
+        let strength_adjustment = gtk::Adjustment::new(50.0, 0.0, 100.0, 5.0, 10.0, 0.0);
+        let adaptive_strength = adw::SpinRow::new(Some(&strength_adjustment), 5.0, 0);
+        adaptive_strength.set_title("Strength");
+        adaptive_strength.set_subtitle(&strength_subtitle(50.0));
+        adaptive.add(&adaptive_on);
+        adaptive.add(&adaptive_strength);
 
         let startup = adw::PreferencesGroup::new();
         startup.set_title("Startup");
@@ -97,6 +117,7 @@ impl OptionsPage {
         window.add(&show_in_taskbar);
 
         page.add(&display);
+        page.add(&adaptive);
         page.add(&startup);
         page.add(&window);
 
@@ -104,6 +125,8 @@ impl OptionsPage {
             show_ids,
             show_boundaries,
             non_dimmable,
+            adaptive_on,
+            adaptive_strength,
             auto_run,
             start_minimised,
             movable: movable_row,
@@ -126,6 +149,21 @@ impl OptionsPage {
             &guard,
             &toast,
         );
+        connect_toggle(&rows.adaptive_on, ToggleOption::Adaptive, &shared, &guard, &toast);
+        {
+            let shared = Arc::clone(&shared);
+            let guard = Rc::clone(&guard);
+            let toast = Rc::clone(&toast);
+            rows.adaptive_strength.connect_value_notify(move |row| {
+                row.set_subtitle(&strength_subtitle(row.value()));
+                if guard.get() {
+                    return;
+                }
+                if let Err(error) = shared.set_adaptive_strength(row.value()) {
+                    toast(&error);
+                }
+            });
+        }
         connect_toggle(
             &rows.start_minimised,
             ToggleOption::StartMinimised,
@@ -171,6 +209,12 @@ impl OptionsPage {
         self.rows.show_ids.set_active(snapshot.settings.show_ids);
         self.rows.show_boundaries.set_active(snapshot.settings.show_boundaries);
         self.rows.non_dimmable.set_active(snapshot.settings.non_dimmable_window);
+        self.rows.adaptive_on.set_active(snapshot.settings.adaptive.on);
+        self.rows.adaptive_strength.set_value(snapshot.settings.adaptive.strength);
+        self.rows
+            .adaptive_strength
+            .set_subtitle(&strength_subtitle(snapshot.settings.adaptive.strength));
+        self.rows.adaptive_strength.set_sensitive(snapshot.settings.adaptive.on);
         self.rows.auto_run.set_active(snapshot.settings.auto_run.on);
         self.rows.start_minimised.set_active(snapshot.settings.start_minimised);
         self.rows.movable.set_active(snapshot.settings.movable_window);
@@ -179,6 +223,15 @@ impl OptionsPage {
         self.movable.set(snapshot.settings.movable_window);
         self.guard.set(false);
     }
+}
+
+/// Mirrors the formulas in the extension so the number shown here is the number
+/// actually used: 0-100 strength maps to encoded-sRGB brightness targets.
+fn strength_subtitle(strength: f64) -> String {
+    let s = strength.clamp(0.0, 100.0) / 100.0;
+    let high = 0.20f64.mul_add(-s, 0.72);
+    let mean = 0.14f64.mul_add(-s, 0.42);
+    format!("Brightness targets: {:.0}% peak, {:.0}% average.", high * 100.0, mean * 100.0)
 }
 
 fn switch_row(title: &str, subtitle: &str) -> adw::SwitchRow {

@@ -10,6 +10,9 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 SOURCE=$ROOT/gnome-extension/dimmer@dimmer.linux
 OUT=${1:-$ROOT/dist}
 EXPECTED=(
+    adaptiveCapture.js
+    adaptiveController.js
+    adaptiveMath.js
     dbusClient.js
     extension.js
     indicator.js
@@ -31,6 +34,9 @@ fi
 
 mkdir -p "$OUT"
 gnome-extensions pack --force --out-dir "$OUT" \
+    --extra-source=adaptiveCapture.js \
+    --extra-source=adaptiveController.js \
+    --extra-source=adaptiveMath.js \
     --extra-source=dbusClient.js \
     --extra-source=indicator.js \
     --extra-source=overlayManager.js \

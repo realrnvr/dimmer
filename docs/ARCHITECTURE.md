@@ -73,6 +73,9 @@ overlay state. This mirrors the proven SpotlightDimmer GNOME adapter design (MIT
 | `WindowResetCompleted` | `(s serial, b success) → ()` | GNOME Shell reports the confirmed reset result to the app |
 | `SetMaster` | `(b on, d dim) → ()` | Update master quickly (indicator menu) |
 | `SetScreen` | `(i id, b on, d dim) → ()` | Update one screen quickly |
+| `SetAdaptive` | `(b on, d strength) → ()` | Turn adaptive dimming on/off and set its strength |
+| `ReportAdaptiveMetrics` | `(s json) → ()` | Extension reports live adaptive measurements at 2 Hz; malformed payloads are ignored |
+| `GetAdaptiveMetrics` | `() → s` | Last adaptive payload as JSON, or `null` before the first report (diagnostics) |
 | `ExtensionDisconnected` | `() → ()` | Extension disabling itself; clears `extension_connected` without hiding overlays logically |
 | `Quit` | `() → ()` | Save and quit the application |
 
@@ -102,6 +105,7 @@ show its final success or failure toast.
   "show_boundaries": false,
   "non_dimmable_window": true,
   "master": { "on": false, "dim": 30.0 },
+  "adaptive": { "on": false, "strength": 50.0 },
   "screens": [
     {
       "id": 1,
@@ -145,6 +149,7 @@ fields ignored by the original):
   "CloseHidesToTray": false,
   "ShowInTaskbar": true,
   "Master": { "On": false, "Dim": 30.0 },
+  "Adaptive": { "On": false, "Strength": 50.0 },
   "Screens": [
     { "Id": 1, "On": true, "Dim": 30.0, "Tint": "000000" }
   ],
@@ -189,6 +194,47 @@ Writes are atomic (temp file + rename). Malformed files are backed up to
 - Because the overlay is below Shell chrome, Shell modal dialogs (for example the
   first-login `WelcomeDialog`) dim it with their lightbox. This is intentional:
   the dialog must stay readable and on top.
+
+### Adaptive dimming
+
+Optional, off by default, and global to every screen. It only ever adds darkness
+on top of the user's chosen dim; it cannot brighten the screen or change the tint.
+
+- **Layer.** Each screen gets a second rectangle group of pure black, above the
+  tint rectangles and below the boundary and ID label. The user's tint
+  compositing therefore stays bit-identical, and the extra darkness is
+  independent of the tint colour.
+- **Sampling.** Four times a second (250 ms × `ceil(screens/2)`) the extension
+  calls `Clutter.Stage.paint_to_content()` synchronously for one monitor at a
+  fixed 32 400-pixel budget (240×135 at 16:9), then decodes the result through
+  `Shell.Screenshot.composite_to_stream()` with GdkPixbuf. Sampling covers the
+  non-dimmable hole and the panel; those regions are excluded by a mask because
+  neither carries the adaptive layer. Ten samples a second drive the actor; the
+  cost measured on GNOME 50.6 is 2–10 ms per full sample.
+- **Statistics.** A 256-bin luma histogram over the masked pixels yields the
+  arithmetic mean `M` and the mean of the brightest 20 % `H`. Both are encoded
+  sRGB fractions in `[0, 1]`, the space Mutter actually blends in, so the model
+  below is exact rather than perceptual guesswork.
+- **Feedback.** The capture includes the adaptive layer already applied, so the
+  controller divides it back out: `x = y / (1 − a_q)`, where `a_q` is the alpha
+  quantised to 8 bits, the precision St renders. Scaling preserves ordering, so
+  this recovers `H` and `M` exactly.
+- **Control law.** Strength `s ∈ [0, 1]` sets two ceilings, `H_target = 0.72 −
+  0.20 s` and `M_target = 0.42 − 0.14 s`. The smallest alpha satisfying both is
+  `a = min(max(1 − H_target/H, 1 − M_target/M), headroom)`, with `headroom =
+  max(0, min(0.50, 0.90 − user_dim))`. Adaptive darkness is capped at 0.50 and
+  the total at 0.90; at 90 % user dim there is no headroom and the layer stays
+  off. Because one scalar multiply scales both statistics, taking the maximum of
+  the two requirements is exact, not a tuning choice.
+- **Dynamics.** Attack 0.80/s, release 0.10/s, hysteresis 0.02, settle 0.005.
+  Darkening is visible immediately; lightening is deliberately slow so a passing
+  bright window does not flash.
+- **Pausing.** Overview, lock screen, modal dialogs and open panel menus freeze
+  the layer instead of releasing it, so nothing jumps behind Shell chrome.
+- **Failure handling.** Three consecutive capture failures disable the feature
+  for the session, clear the layer, and report `available: false`. No pixels are
+  written to disk, kept between samples, or sent anywhere; only the two
+  statistics and the applied alpha travel over D-Bus.
 
 ## 6. Lifecycle
 

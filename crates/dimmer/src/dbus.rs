@@ -68,6 +68,30 @@ impl DimmerService {
         }
     }
 
+    /// Stores live adaptive measurements reported by the extension.
+    ///
+    /// Additive and optional: an extension that predates this method simply
+    /// never calls it, and the Debug page shows "no data".
+    #[zbus(name = "ReportAdaptiveMetrics")]
+    #[allow(clippy::needless_pass_by_value)]
+    fn report_adaptive_metrics(&self, json: String) {
+        self.shared.set_adaptive_metrics(&json);
+    }
+
+    /// Returns the last adaptive payload reported by the extension.
+    ///
+    /// Diagnostic only; `null` means nothing has been reported yet.
+    #[zbus(name = "GetAdaptiveMetrics")]
+    fn get_adaptive_metrics(&self) -> String {
+        self.shared.adaptive_metrics_json()
+    }
+
+    /// Turns adaptive dimming on or off and sets its strength.
+    #[zbus(name = "SetAdaptive")]
+    fn set_adaptive(&self, on: bool, strength: f64) {
+        self.shared.api_set_adaptive(on, strength);
+    }
+
     /// Updates the master dimmer.
     #[zbus(name = "SetMaster")]
     fn set_master(&self, on: bool, dim: f64) {

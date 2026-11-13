@@ -11,7 +11,7 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-import {layoutSignature, overlayColor, rectsForMonitor} from './overlayMath.js';
+import {adaptiveColor, layoutSignature, overlayColor, rectsForMonitor} from './overlayMath.js';
 import {resetWindowFrame, windowMatchesResetFrame} from './windowReset.js';
 
 const HOLE_REFRESH_MS = 150;
@@ -57,6 +57,7 @@ export class OverlayManager {
         this._unredirectDisabled = null;
         this._windowResetTimer = 0;
         this._windowResetRequest = null;
+        this._adaptive = new Map();
     }
 
     enable() {
@@ -121,6 +122,7 @@ export class OverlayManager {
         this._state = null;
         this._layout = '';
         this._lastHole = null;
+        this._adaptive.clear();
     }
 
     setState(state) {
@@ -137,6 +139,7 @@ export class OverlayManager {
         this._state = null;
         this._lastHole = null;
         this._stopHoleTimer();
+        this._adaptive.clear();
 
         if (this._root)
             this._root.visible = false;
@@ -288,6 +291,18 @@ export class OverlayManager {
             rectGroup.set_size(stageWidth, stageHeight);
             group.add_child(rectGroup);
 
+            // Adaptive darkness rides above the tint rectangles so the user's
+            // tint compositing stays bit-identical, but below the boundary and
+            // the screen-id label so those stay legible.
+            const adaptiveGroup = new St.Widget({
+                name: `dimmer-adaptive-rects-${screen.id}`,
+                reactive: false,
+                can_focus: false,
+                track_hover: false,
+            });
+            adaptiveGroup.set_size(stageWidth, stageHeight);
+            group.add_child(adaptiveGroup);
+
             const boundary = new St.Widget({
                 name: `dimmer-overlay-boundary-${screen.id}`,
                 style_class: 'dimmer-boundary',
@@ -314,6 +329,8 @@ export class OverlayManager {
                 group,
                 rectGroup,
                 rects: [],
+                adaptiveGroup,
+                adaptiveRects: [],
                 boundary,
                 label,
             });
@@ -327,29 +344,49 @@ export class OverlayManager {
         const colour = overlayColor(screen.tint ?? '000000', dim);
 
         while (entry.rects.length < rects.length) {
+            const index = entry.rects.length;
             const actor = new St.Widget({
-                name: `dimmer-overlay-rect-${screen.id}-${entry.rects.length}`,
+                name: `dimmer-overlay-rect-${screen.id}-${index}`,
                 reactive: false,
                 can_focus: false,
                 track_hover: false,
             });
             entry.rectGroup.add_child(actor);
             entry.rects.push(actor);
+
+            const adaptive = new St.Widget({
+                name: `dimmer-adaptive-rect-${screen.id}-${index}`,
+                reactive: false,
+                can_focus: false,
+                track_hover: false,
+                visible: false,
+            });
+            entry.adaptiveGroup.add_child(adaptive);
+            entry.adaptiveRects.push(adaptive);
         }
 
         for (let index = 0; index < entry.rects.length; index++) {
             const actor = entry.rects[index];
+            const adaptive = entry.adaptiveRects[index];
             const rectangle = rects[index];
+
             if (!rectangle) {
                 actor.visible = false;
+                adaptive._dimmerActive = false;
+                adaptive.visible = false;
                 continue;
             }
 
-            actor.set_position(rectangle.x, rectangle.y);
-            actor.set_size(rectangle.width, rectangle.height);
+            for (const layer of [actor, adaptive]) {
+                layer.set_position(rectangle.x, rectangle.y);
+                layer.set_size(rectangle.width, rectangle.height);
+            }
             actor.set_style(`background-color: ${colour};`);
             actor.visible = dimmed;
+            adaptive._dimmerActive = true;
         }
+
+        this._paintAdaptive(screen.id);
 
         entry.boundary.set_position(geometry.x, geometry.y);
         entry.boundary.set_size(geometry.width, geometry.height);
@@ -358,6 +395,84 @@ export class OverlayManager {
         entry.label.set_position(geometry.x + 35, geometry.y + 30);
         entry.label.text = String(screen.id);
         entry.label.visible = Boolean(this._state?.show_ids);
+    }
+
+    // --- adaptive layer ---------------------------------------------------
+
+    /**
+     * Set the adaptive darkness for one screen, or for every screen when `id`
+     * is null.  Values are clamped: adaptive mode may only add blackness.
+     *
+     * @param {number | null} id
+     * @param {number} alpha 0-1
+     */
+    setAdaptiveAlpha(id, alpha) {
+        const value = Math.max(0, Math.min(1, Number(alpha) || 0));
+
+        if (id === null || id === undefined) {
+            for (const key of this._screenActors.keys())
+                this._adaptive.set(key, value);
+            for (const key of this._screenActors.keys())
+                this._paintAdaptive(key);
+            return;
+        }
+
+        this._adaptive.set(id, value);
+        this._paintAdaptive(id);
+    }
+
+    /** Remove all adaptive darkness, e.g. when the feature is switched off. */
+    clearAdaptive() {
+        this.setAdaptiveAlpha(null, 0);
+    }
+
+    _paintAdaptive(id) {
+        const entry = this._screenActors.get(id);
+        if (!entry)
+            return;
+
+        const alpha = this._adaptive.get(id) ?? 0;
+        const colour = adaptiveColor(alpha);
+
+        for (const actor of entry.adaptiveRects) {
+            if (actor._dimmerActive !== true) {
+                actor.visible = false;
+                continue;
+            }
+            actor.set_style(`background-color: ${colour};`);
+            actor.visible = alpha > 0;
+        }
+    }
+
+    /**
+     * The non-dimmable window rectangle, when it is currently being punched
+     * out of the overlays.  Adaptive sampling excludes it, because it has
+     * neither the user's dim nor the adaptive layer.
+     *
+     * @returns {{x: number, y: number, width: number, height: number} | null}
+     */
+    holeRect() {
+        if (!this._enabled || !this._holeActive())
+            return null;
+        return this._lastHole;
+    }
+
+    /**
+     * Whether the overlay is actually part of the last painted frame.  The
+     * controller uses this to decide whether the adaptive layer must be
+     * inverted out of a capture or not.
+     *
+     * @returns {boolean}
+     */
+    isPainted() {
+        const root = this._root;
+        if (!root)
+            return false;
+        try {
+            return Boolean(root.mapped && root.get_paint_visibility());
+        } catch (_error) {
+            return Boolean(root.mapped);
+        }
     }
 
     _destroyScreens() {

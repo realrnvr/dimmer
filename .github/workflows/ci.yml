@@ -38,6 +38,7 @@ jobs:
         run: |
           gjs -m gnome-extension/tests/metadata.test.js
           gjs -m gnome-extension/tests/overlay-math.test.js
+          gjs -m gnome-extension/tests/adaptive-math.test.js
           gjs -m gnome-extension/tests/window-reset.test.js
       - name: Package the extension
         working-directory: .
@@ -63,6 +64,11 @@ jobs:
         run: >-
           DIMMER_BIN=$PWD/target/release/dimmer timeout 180
           dbus-run-session -- bash gnome-extension/tests/multimon-shell.sh
+      - name: Exercise adaptive dimming in a private GNOME Shell
+        working-directory: .
+        run: >-
+          DIMMER_BIN=$PWD/target/release/dimmer timeout 300
+          dbus-run-session -- bash gnome-extension/tests/adaptive-shell.sh
 
   gui:
     runs-on: ubuntu-latest

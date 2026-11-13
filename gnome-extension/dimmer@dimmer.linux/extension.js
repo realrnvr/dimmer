@@ -7,6 +7,7 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
+import {AdaptiveController} from './adaptiveController.js';
 import {DimmerDbusClient} from './dbusClient.js';
 import {DimmerIndicator} from './indicator.js';
 import {OverlayManager} from './overlayManager.js';
@@ -19,11 +20,20 @@ export default class DimmerExtension extends Extension {
         this._lastWindowResetSerial = null;
 
         this._overlays.enable();
+
+        // Adaptive mode owns no settings: it reads the `adaptive` block from
+        // the state document and reports measurements back over D-Bus.
+        this._adaptive = new AdaptiveController(this._overlays, {
+            reportMetrics: payload => this._client?.reportAdaptiveMetrics(payload),
+        });
+        this._adaptive.enable();
+
         Main.panel.addToStatusArea(this.uuid, this._indicator, 0, 'right');
 
         this._clientIds = [
             this._client.connect('state-changed', (_client, state) => {
                 this._overlays?.setState(state);
+                this._adaptive?.setState(state);
                 const resetSerial = Number(state.window_reset_serial ?? 0);
                 if (this._lastWindowResetSerial !== null &&
                     resetSerial !== this._lastWindowResetSerial)
@@ -38,6 +48,7 @@ export default class DimmerExtension extends Extension {
             }),
             this._client.connect('disconnected', () => {
                 this._overlays?.clear();
+                this._adaptive?.setState(null);
             }),
         ];
 
@@ -57,6 +68,9 @@ export default class DimmerExtension extends Extension {
         this._client?.extensionDisconnected();
         this._client?.destroy();
         this._client = null;
+
+        this._adaptive?.disable();
+        this._adaptive = null;
 
         this._overlays?.disable();
         this._overlays = null;

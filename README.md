@@ -13,6 +13,8 @@ when its window is closed.
 - Master control that applies one level to all displays.
 - Optional screen identity numbers and monitor boundaries.
 - Tint colour mixed into the dimming overlay.
+- Optional adaptive dimming that adds darkness on bright content; it never
+  brightens the screen or exceeds 90% total.
 - Non-dimmable settings window.
 - Top-bar indicator with Open, Reset window position and Quit.
 - Start minimised and XDG autostart support.
@@ -168,6 +170,43 @@ second `--minimised` launch exits without raising it.
 - **Non-dimmable window** cuts the dim layer around the settings window so it
   stays readable while the rest of its monitor is dimmed.
 
+### Adaptive dimming
+
+Optional and off by default. When enabled, Dimmer measures the brightness of the
+dimmed screen four times a second and adds just enough extra black to bring
+bright content under two calibrated ceilings. It can only darken: the layer is
+capped at 50% extra and at 90% total, so it never brightens the screen and never
+undoes your chosen dim.
+
+- The measurement runs inside GNOME Shell and is discarded after each sample.
+  Nothing is recorded, saved or sent anywhere.
+- The panel and the non-dimmable settings window are excluded, because Dimmer
+  does not dim them.
+- The response is deterministic. Strength 0–100 moves the peak/average targets
+  from 72%/42% to 52%/28% brightness, and the smallest extra darkness that meets
+  both is applied. Darkness is added at up to 0.8 alpha/s and released at 0.1
+  alpha/s, so a passing bright window does not flash.
+- Each monitor is measured and controlled independently. At 90% user dim there is
+  no headroom left, so adaptive mode stays off.
+- It pauses behind the overview, the lock screen, Shell dialogs and open menus,
+  and resumes when they close.
+
+The table is the exact result for uniformly bright content at the default
+strength (50) with no user dim. `A` is the fraction of the dimmed area that is
+white.
+
+| White area `A` | Extra darkness |
+|---|---|
+| 0–12.4% | 0 |
+| 15% | 17% |
+| 20–50% | 38% |
+| 60% | 42% |
+| 80–100% | 50% (cap) |
+
+"Deterministic" describes the software response, not a promise of comfort:
+ambient light, monitor gamma and individual sensitivity are outside what the
+extension can measure. Use Strength to taste.
+
 ### Options
 
 - Start minimised.
@@ -203,6 +242,7 @@ used:
   "CloseHidesToTray": false,
   "ShowInTaskbar": true,
   "Master": { "On": false, "Dim": 30.0 },
+  "Adaptive": { "On": false, "Strength": 50.0 },
   "Screens": [
     { "Id": 1, "On": true, "Dim": 30.0, "Tint": "000000" }
   ],

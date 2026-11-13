@@ -4,6 +4,7 @@
 // checked without a compositor.
 
 import {
+    adaptiveColor,
     intersectRect,
     layoutSignature,
     overlayColor,
@@ -72,6 +73,18 @@ equal(overlayColor('ff8000', 90), 'rgba(255, 128, 0, 0.900)', 'overlayColor 90%'
 equal(overlayColor('ff8000', 250), 'rgba(255, 128, 0, 0.900)', 'overlayColor clamps high');
 equal(overlayColor('ff8000', -5), 'rgba(255, 128, 0, 0.000)', 'overlayColor clamps low');
 equal(overlayColor('ff8000', 'nope'), 'rgba(255, 128, 0, 0.000)', 'overlayColor rejects text');
+
+// --- adaptive layer colour ------------------------------------------------
+
+equal(adaptiveColor(0), 'rgba(0, 0, 0, 0.0000)', 'adaptiveColor 0');
+equal(adaptiveColor(0.5), 'rgba(0, 0, 0, 0.5020)', 'adaptiveColor 0.5');
+equal(adaptiveColor(1), 'rgba(0, 0, 0, 1.0000)', 'adaptiveColor 1');
+equal(adaptiveColor(2), 'rgba(0, 0, 0, 1.0000)', 'adaptiveColor clamps high');
+equal(adaptiveColor(-1), 'rgba(0, 0, 0, 0.0000)', 'adaptiveColor clamps low');
+equal(adaptiveColor('nope'), 'rgba(0, 0, 0, 0.0000)', 'adaptiveColor rejects text');
+// 8-bit quantisation: the rendered alpha must match the inverted alpha.
+equal(adaptiveColor(0.3), `rgba(0, 0, 0, ${(Math.round(0.3 * 255) / 255).toFixed(4)})`,
+    'adaptiveColor quantises to 8 bits');
 
 // --- rectangle intersection ----------------------------------------------
 

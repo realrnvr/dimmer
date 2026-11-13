@@ -56,6 +56,14 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="1.2.0" date="2026-11-14">
+      <description>
+        <p>Adaptive dimming: an optional mode that measures the dimmed screen
+        and adds calibrated darkness on bright content. It only ever darkens,
+        is capped at 90% total, and runs independently per monitor. Adaptive
+        settings are off by default and exposed in Options and the Debug tab.</p>
+      </description>
+    </release>
     <release version="1.1.0" date="2026-11-12">
       <description>
         <p>GitHub Releases are now the primary installation path. Flatpak

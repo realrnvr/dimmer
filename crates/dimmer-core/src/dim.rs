@@ -9,6 +9,16 @@ pub const fn clamp_dim(dim: f64) -> f64 {
     if dim.is_finite() { dim.clamp(0.0, MAX_DIM) } else { 0.0 }
 }
 
+/// Maximum adaptive strength, matching the UI slider range.
+pub const MAX_STRENGTH: f64 = 100.0;
+
+/// Clamps an adaptive strength percentage, mapping NaN/infinities to the
+/// default of 50 so a corrupt file cannot switch the feature wide open.
+#[must_use]
+pub const fn clamp_strength(strength: f64) -> f64 {
+    if strength.is_finite() { strength.clamp(0.0, MAX_STRENGTH) } else { 50.0 }
+}
+
 /// Effective opacity percentage for a screen.  A disabled screen is fully clear.
 #[must_use]
 pub const fn effective_dim(on: bool, dim: f64) -> f64 {
@@ -67,6 +77,16 @@ mod tests {
         assert_eq!(clamp_dim(91.0), 90.0);
         assert_eq!(clamp_dim(f64::NAN), 0.0);
         assert_eq!(clamp_dim(f64::INFINITY), 0.0);
+    }
+
+    #[test]
+    fn clamps_strength() {
+        assert_eq!(clamp_strength(-10.0), 0.0);
+        assert_eq!(clamp_strength(50.0), 50.0);
+        assert_eq!(clamp_strength(100.0), 100.0);
+        assert_eq!(clamp_strength(500.0), 100.0);
+        assert_eq!(clamp_strength(f64::NAN), 50.0);
+        assert_eq!(clamp_strength(f64::INFINITY), 50.0);
     }
 
     #[test]

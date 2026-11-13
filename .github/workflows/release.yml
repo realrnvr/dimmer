@@ -45,6 +45,7 @@ jobs:
         run: |
           gjs -m gnome-extension/tests/metadata.test.js
           gjs -m gnome-extension/tests/overlay-math.test.js
+          gjs -m gnome-extension/tests/adaptive-math.test.js
           gjs -m gnome-extension/tests/window-reset.test.js
       - name: Check extension in private GNOME Shell sessions
         working-directory: .
@@ -53,6 +54,8 @@ jobs:
             dbus-run-session -- bash gnome-extension/tests/headless-shell.sh
           DIMMER_BIN=$PWD/target/release/dimmer timeout 180 \
             dbus-run-session -- bash gnome-extension/tests/multimon-shell.sh
+          DIMMER_BIN=$PWD/target/release/dimmer timeout 300 \
+            dbus-run-session -- bash gnome-extension/tests/adaptive-shell.sh
       - name: Stage release assets
         working-directory: .
         run: |

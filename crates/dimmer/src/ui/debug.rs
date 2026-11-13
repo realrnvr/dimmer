@@ -6,8 +6,15 @@ use std::sync::Arc;
 
 use adw::prelude::*;
 
-use crate::shared::SharedState;
+use crate::shared::{SharedState, Snapshot};
 use crate::ui::widgets::name_group_list;
+
+struct AdaptiveRows {
+    group: adw::PreferencesGroup,
+    /// Rows this page added, so a refresh removes exactly those and never the
+    /// preferences group's internal container.
+    rows: RefCell<Vec<adw::ActionRow>>,
+}
 
 struct StatusRows {
     application: adw::ActionRow,
@@ -22,6 +29,7 @@ struct StatusRows {
 pub struct DebugPage {
     page: adw::PreferencesPage,
     rows: StatusRows,
+    adaptive: AdaptiveRows,
     view: gtk::TextView,
     text: Rc<RefCell<String>>,
     shared: Arc<SharedState>,
@@ -50,6 +58,15 @@ impl DebugPage {
         status.add(&rows.settings);
         status.add(&rows.autostart);
         page.add(&status);
+
+        let adaptive_group = adw::PreferencesGroup::new();
+        adaptive_group.set_title("Adaptive");
+        name_group_list(&adaptive_group, "Adaptive");
+        adaptive_group.set_description(Some(
+            "Measured by the GNOME extension. Peak and average are encoded-sRGB \
+             brightness after your dim; the percentage is the extra darkness applied.",
+        ));
+        page.add(&adaptive_group);
 
         let diagnostics = adw::PreferencesGroup::new();
         diagnostics.set_title("Diagnostics");
@@ -98,6 +115,7 @@ impl DebugPage {
         let page = Rc::new(Self {
             page,
             rows,
+            adaptive: AdaptiveRows { group: adaptive_group, rows: RefCell::new(Vec::new()) },
             view,
             text: Rc::new(RefCell::new(String::new())),
             shared,
@@ -106,6 +124,62 @@ impl DebugPage {
         page.connect_buttons(&refresh, &copy, &settings_row, &extension_row);
         page.refresh();
         page
+    }
+
+    fn add_adaptive_row(&self, title: &str, subtitle: &str) {
+        let row = status_row_with(title, subtitle);
+        self.adaptive.group.add(&row);
+        self.adaptive.rows.borrow_mut().push(row);
+    }
+
+    fn refresh_adaptive(&self, snapshot: &Snapshot) {
+        for row in self.adaptive.rows.borrow_mut().drain(..) {
+            self.adaptive.group.remove(&row);
+        }
+
+        if !snapshot.settings.adaptive.on {
+            self.add_adaptive_row("Adaptive dimming", "Off");
+            return;
+        }
+
+        let Some(metrics) = snapshot.adaptive_metrics.as_ref() else {
+            self.add_adaptive_row("Adaptive dimming", "On · waiting for the extension");
+            return;
+        };
+
+        if !metrics.available {
+            self.add_adaptive_row(
+                "Adaptive dimming",
+                "On · unavailable: this GNOME Shell cannot capture the screen",
+            );
+            return;
+        }
+
+        if metrics.screens.is_empty() {
+            self.add_adaptive_row(
+                "Adaptive dimming",
+                if metrics.paused { "On · paused" } else { "On · no dimmable screens" },
+            );
+            return;
+        }
+
+        for screen in &metrics.screens {
+            let peak = screen
+                .high
+                .map_or_else(|| "—".to_owned(), |value| format!("{:.0}%", value * 100.0));
+            let mean = screen
+                .mean
+                .map_or_else(|| "—".to_owned(), |value| format!("{:.0}%", value * 100.0));
+            let timing = screen.sample_ms.map_or_else(String::new, |ms| format!(" · {ms:.1} ms"));
+            let state = if metrics.paused { " · paused" } else { "" };
+            self.add_adaptive_row(
+                &format!("Screen {}", screen.id),
+                &format!(
+                    "Peak {peak} · average {mean} · +{:.0}%{state}{timing}",
+                    screen.alpha * 100.0
+                ),
+            );
+        }
     }
 
     #[must_use]
@@ -154,6 +228,7 @@ impl DebugPage {
             },
         );
         self.rows.autostart.set_subtitle(&autostart);
+        self.refresh_adaptive(&snapshot);
 
         let report = self.shared.diagnostics();
         if let Ok(mut text) = self.text.try_borrow_mut() {
@@ -222,6 +297,13 @@ fn extension_status(snapshot: &crate::shared::Snapshot) -> String {
     } else {
         "not installed".to_owned()
     }
+}
+
+fn status_row_with(title: &str, subtitle: &str) -> adw::ActionRow {
+    let row = adw::ActionRow::new();
+    row.set_title(title);
+    row.set_subtitle(subtitle);
+    row
 }
 
 fn status_row(title: &str) -> adw::ActionRow {

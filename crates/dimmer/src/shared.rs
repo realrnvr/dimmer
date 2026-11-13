@@ -14,6 +14,7 @@ use dimmer_core::settings::LoadedSettings;
 use dimmer_core::state::{StateContext, build_state};
 use dimmer_core::time::now_string;
 use gtk::glib;
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::log::LogBuffer;
@@ -50,6 +51,37 @@ pub enum ToggleOption {
     StartMinimised,
     CloseHidesToTray,
     ShowInTaskbar,
+    Adaptive,
+}
+
+/// Live adaptive measurements reported by the extension.
+///
+/// These are informational only: the extension owns the pixels, so the
+/// application cannot compute them itself.  Absent means "no data yet".
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AdaptiveScreenMetrics {
+    pub id: i32,
+    pub high: Option<f64>,
+    pub mean: Option<f64>,
+    pub alpha: f64,
+    pub sample_ms: Option<f64>,
+}
+
+/// One `ReportAdaptiveMetrics` payload.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AdaptiveMetrics {
+    pub available: bool,
+    pub paused: bool,
+    pub screens: Vec<AdaptiveScreenMetrics>,
+}
+
+impl AdaptiveMetrics {
+    #[must_use]
+    pub fn screen(&self, id: i32) -> Option<&AdaptiveScreenMetrics> {
+        self.screens.iter().find(|screen| screen.id == id)
+    }
 }
 
 /// A consistent snapshot for rendering the UI.
@@ -65,6 +97,7 @@ pub struct Snapshot {
     pub settings_warning: Option<String>,
     pub last_error: Option<String>,
     pub extension_installed: bool,
+    pub adaptive_metrics: Option<AdaptiveMetrics>,
 }
 
 /// Environment details captured once at startup.
@@ -92,6 +125,7 @@ pub struct SharedState {
     window_reset_serial: AtomicU64,
     extension_connected: AtomicBool,
     extension_version: Mutex<Option<String>>,
+    adaptive_metrics: Mutex<Option<AdaptiveMetrics>>,
     last_error: Mutex<Option<String>>,
     settings_warning: Mutex<Option<String>>,
     ui_sender: Mutex<Option<UnboundedSender<UiCommand>>>,
@@ -153,6 +187,7 @@ impl SharedState {
             window_reset_serial: AtomicU64::new(0),
             extension_connected: AtomicBool::new(false),
             extension_version: Mutex::new(None),
+            adaptive_metrics: Mutex::new(None),
             last_error: Mutex::new(None),
             settings_warning: Mutex::new(loaded.warning),
             ui_sender: Mutex::new(None),
@@ -306,6 +341,7 @@ impl SharedState {
             settings_warning: self.settings_warning(),
             last_error: self.last_error(),
             extension_installed: self.extension_installed(),
+            adaptive_metrics: self.adaptive_metrics.lock().ok().and_then(|metrics| metrics.clone()),
         }
     }
 
@@ -431,6 +467,9 @@ impl SharedState {
         if let Ok(mut slot) = self.extension_version.lock() {
             *slot = None;
         }
+        if let Ok(mut metrics) = self.adaptive_metrics.lock() {
+            *metrics = None;
+        }
         self.log.info("GNOME extension disconnected");
         self.bump(None);
         self.send_ui(UiCommand::Refresh);
@@ -521,6 +560,30 @@ impl SharedState {
         }
     }
 
+    /// Applies `SetAdaptive` and persists immediately.  Strength is clamped, so
+    /// a script cannot put the feature outside the range the UI offers.
+    pub fn api_set_adaptive(&self, on: bool, strength: f64) {
+        let strength = dimmer_core::dim::clamp_strength(strength);
+        self.ui_mutate(|settings| {
+            settings.adaptive.on = on;
+            settings.adaptive.strength = strength;
+        });
+        if let Err(error) = self.save() {
+            self.log.warn(format!("could not save SetAdaptive: {error}"));
+        }
+    }
+
+    /// Returns the last adaptive payload as JSON, for diagnostics and tests.
+    ///
+    /// `null` means the extension has not reported anything yet.
+    #[must_use]
+    pub fn adaptive_metrics_json(&self) -> String {
+        let stored = self.adaptive_metrics.lock().ok().and_then(|metrics| metrics.clone());
+        stored
+            .and_then(|metrics| serde_json::to_string(&metrics).ok())
+            .unwrap_or_else(|| "null".to_owned())
+    }
+
     /// Applies `SetScreen` from the indicator/extension and persists immediately.
     pub fn api_set_screen(&self, id: i32, on: bool, dim: f64) {
         let dim = clamp_dim(dim);
@@ -549,6 +612,7 @@ impl SharedState {
             ToggleOption::StartMinimised => settings.start_minimised = on,
             ToggleOption::CloseHidesToTray => settings.close_hides_to_tray = on,
             ToggleOption::ShowInTaskbar => settings.show_in_taskbar = on,
+            ToggleOption::Adaptive => settings.adaptive.on = on,
         });
         if option == ToggleOption::StartMinimised
             && self.settings.lock().is_ok_and(|settings| settings.auto_run.on)
@@ -557,6 +621,31 @@ impl SharedState {
         }
         self.save()?;
         Ok(())
+    }
+
+    /// Sets the adaptive strength (0-100), clamped by the model.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the settings file cannot be written.
+    pub fn set_adaptive_strength(&self, strength: f64) -> Result<(), String> {
+        let strength = dimmer_core::dim::clamp_strength(strength);
+        self.ui_mutate(|settings| settings.adaptive.strength = strength);
+        self.save()?;
+        Ok(())
+    }
+
+    /// Stores the latest `ReportAdaptiveMetrics` payload.  Malformed or stale
+    /// payloads are ignored rather than surfaced: telemetry must never make the
+    /// application look broken.
+    pub fn set_adaptive_metrics(&self, json: &str) {
+        let Ok(metrics) = serde_json::from_str::<AdaptiveMetrics>(json) else {
+            return;
+        };
+        if let Ok(mut slot) = self.adaptive_metrics.lock() {
+            *slot = Some(metrics);
+        }
+        self.send_ui(UiCommand::Refresh);
     }
 
     /// Installs or removes the XDG autostart entry.

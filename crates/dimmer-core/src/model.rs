@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::dim::{clamp_dim, normalize_tint};
+use crate::dim::{clamp_dim, clamp_strength, normalize_tint};
 use crate::time::now_string;
 
 /// Saved window position.  The original uses nullable doubles in logical pixels.
@@ -49,6 +49,22 @@ impl Default for MasterSettings {
     }
 }
 
+/// Adaptive dimming settings.  Off by default: an upgrade must never change how
+/// an existing installation looks.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "PascalCase")]
+pub struct AdaptiveSettings {
+    pub on: bool,
+    /// 0-100. Higher values move the brightness targets down, not the cap.
+    pub strength: f64,
+}
+
+impl Default for AdaptiveSettings {
+    fn default() -> Self {
+        Self { on: false, strength: 50.0 }
+    }
+}
+
 /// Per-screen state.  `Connector` is a Linux extension; the original application
 /// ignores unknown JSON members.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -85,6 +101,7 @@ pub struct AppSettings {
     pub show_in_taskbar: bool,
     pub master: MasterSettings,
     pub screens: Vec<ScreenSettings>,
+    pub adaptive: AdaptiveSettings,
     pub last_run: String,
 }
 
@@ -102,6 +119,7 @@ impl Default for AppSettings {
             show_in_taskbar: true,
             master: MasterSettings::default(),
             screens: vec![ScreenSettings::default()],
+            adaptive: AdaptiveSettings::default(),
             last_run: now_string(),
         }
     }
@@ -111,6 +129,7 @@ impl AppSettings {
     /// Clamps values loaded from disk and canonicalises colours.
     pub fn normalize(&mut self) {
         self.master.dim = clamp_dim(self.master.dim);
+        self.adaptive.strength = clamp_strength(self.adaptive.strength);
         if self.screens.is_empty() {
             self.screens.push(ScreenSettings::default());
         }
@@ -226,6 +245,41 @@ mod tests {
         assert_eq!(settings.screens[0].tint, "FF0000");
         assert_eq!(settings.screens[0].connector, None);
         assert_eq!(settings.last_run, "2022-12-01 10:00:00");
+    }
+
+    #[test]
+    fn adaptive_defaults_to_off() {
+        let settings = AppSettings::default();
+        assert!(!settings.adaptive.on);
+        assert_eq!(settings.adaptive.strength, 50.0);
+    }
+
+    #[test]
+    fn adaptive_is_clamped_and_tolerates_corruption() {
+        let mut settings: AppSettings =
+            serde_json::from_str(r#"{"Adaptive": {"On": true, "Strength": 500.0}}"#)
+                .expect("valid JSON");
+        settings.normalize();
+        assert!(settings.adaptive.on);
+        assert_eq!(settings.adaptive.strength, 100.0);
+
+        let mut settings: AppSettings =
+            serde_json::from_str(r#"{"Adaptive": {"On": true, "Strength": -3.0}}"#)
+                .expect("valid JSON");
+        settings.normalize();
+        assert_eq!(settings.adaptive.strength, 0.0);
+    }
+
+    #[test]
+    fn adaptive_round_trips_through_pascal_case() {
+        let mut settings = AppSettings::default();
+        settings.adaptive.on = true;
+        settings.adaptive.strength = 75.0;
+        let json = serde_json::to_string(&settings).expect("serialises");
+        assert!(json.contains(r#""Adaptive":{"On":true,"Strength":75.0}"#), "{json}");
+
+        let parsed: AppSettings = serde_json::from_str(&json).expect("parses back");
+        assert_eq!(parsed.adaptive, settings.adaptive);
     }
 
     #[test]

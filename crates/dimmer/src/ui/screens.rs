@@ -386,6 +386,33 @@ fn refresh_master(master: &MasterCard, snapshot: &Snapshot) {
     master.guard.set(false);
 }
 
+/// Extra adaptive readout for a screen card.  Deliberately factual and silent
+/// whenever there is nothing true to say.
+fn adaptive_suffix(snapshot: &Snapshot, id: i32) -> String {
+    if !snapshot.settings.adaptive.on {
+        return String::new();
+    }
+    let Some(metrics) = snapshot.adaptive_metrics.as_ref() else {
+        return " · adaptive: measuring".to_owned();
+    };
+    if !metrics.available {
+        return " · adaptive: unavailable".to_owned();
+    }
+    let Some(screen) = metrics.screen(id) else {
+        return " · adaptive: idle".to_owned();
+    };
+    if metrics.paused {
+        return " · adaptive: paused".to_owned();
+    }
+    if screen.alpha <= 0.005 {
+        if snapshot.active.iter().any(|active| active.id == id && active.dim >= 90.0) {
+            return " · adaptive: no headroom".to_owned();
+        }
+        return " · adaptive: inactive".to_owned();
+    }
+    format!(" · adaptive +{:.0}%", screen.alpha * 100.0)
+}
+
 fn refresh_card(card: &ScreenCard, snapshot: &Snapshot) {
     let Some(screen) = snapshot.active.iter().find(|screen| screen.id == card.id) else {
         return;
@@ -400,12 +427,14 @@ fn refresh_card(card: &ScreenCard, snapshot: &Snapshot) {
         paint_tint(&card.tint_swatch, &card.tint_color, &screen.tint);
         card.tint_hex.borrow_mut().clone_from(&screen.tint);
     }
+    let adaptive = adaptive_suffix(snapshot, screen.id);
     card.subtitle.set_text(&format!(
-        "{} · {}×{}{}",
+        "{} · {}×{}{}{}",
         monitor.connector,
         monitor.geometry.width,
         monitor.geometry.height,
-        if monitor.primary { " · primary" } else { "" }
+        if monitor.primary { " · primary" } else { "" },
+        adaptive
     ));
     card.guard.set(false);
 }

@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::dim::{clamp_dim, effective_dim, normalize_tint};
+use crate::dim::{clamp_dim, clamp_strength, effective_dim, normalize_tint};
 use crate::model::{AppSettings, ScreenSettings};
 use crate::monitor::MonitorInfo;
 
@@ -41,6 +41,17 @@ pub struct ScreenState {
     pub primary: bool,
 }
 
+/// Adaptive dimming as published to the extension.
+///
+/// Optional on the wire: an extension that predates it ignores the block, and
+/// an application that predates it leaves it absent, which means "off".
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct AdaptiveState {
+    pub on: bool,
+    pub strength: f64,
+}
+
 /// Complete overlay state document.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -57,6 +68,7 @@ pub struct OverlayState {
     pub show_boundaries: bool,
     pub non_dimmable_window: bool,
     pub master: MasterState,
+    pub adaptive: AdaptiveState,
     pub screens: Vec<ScreenState>,
 }
 
@@ -120,6 +132,10 @@ pub fn build_state(
         show_boundaries: settings.show_boundaries,
         non_dimmable_window: settings.non_dimmable_window,
         master: MasterState { on: settings.master.on, dim: clamp_dim(settings.master.dim) },
+        adaptive: AdaptiveState {
+            on: settings.adaptive.on,
+            strength: clamp_strength(settings.adaptive.strength),
+        },
         screens,
     }
 }
@@ -215,6 +231,20 @@ mod tests {
         assert_eq!(value["screens"][0]["connector"], "eDP-1");
         assert_eq!(value["master"]["dim"], 40.0);
         assert!(value.get("app_version").is_some());
+    }
+
+    #[test]
+    fn adaptive_block_is_published_and_clamped() {
+        let (mut settings, active, monitors) = fixture();
+        settings.adaptive.on = true;
+        settings.adaptive.strength = 400.0;
+        let state = build_state(&settings, &active, &monitors, &StateContext::default());
+        assert!(state.adaptive.on);
+        assert_eq!(state.adaptive.strength, 100.0);
+
+        let value: Value = serde_json::from_str(&state.to_json().expect("json")).expect("parse");
+        assert_eq!(value["adaptive"]["on"], true);
+        assert_eq!(value["adaptive"]["strength"], 100.0);
     }
 
     #[test]
