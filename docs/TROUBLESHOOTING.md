@@ -95,12 +95,18 @@ Adaptive mode only adds darkness above two brightness ceilings, so it is
 supposed to stay invisible on ordinary dark or mid-tone content. Check these
 before suspecting a bug:
 
+0. The **running** extension has the adaptive modules. `gnome-extensions info
+   dimmer@dimmer.linux` must report `Version: 5`; a lower number means the
+   Shell is still using the modules it loaded at login even though newer files
+   are on disk, and `GetAdaptiveMetrics` will stay `null`. Log out and back in.
 1. Adaptive is on in **Options → Adaptive**, and the screen is on with a dim
    above 0. The feature is inactive at 0% dim (there is no dim layer to build
    on) and at 90% dim (no headroom).
 2. The content is actually bright. At strength 50 nothing below 62% peak
    brightness reacts, and at 30% user dim a 50% grey page is already at the 35%
-   average ceiling. Pure white is the reliable test.
+   average ceiling. Above about 61% user dim even pure white is below that
+   ceiling, so no content can react at all. Pure white at 10% dim is the
+   reliable test.
 3. The overview, lock screen, a Shell dialog or an open panel menu pauses the
    layer on purpose.
 4. The Debug tab must show moving peak/average values and a `+N%`. “Waiting for
